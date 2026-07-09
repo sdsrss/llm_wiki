@@ -4,6 +4,7 @@ import { initKb } from '../src/init.mjs'
 import { scanSource } from '../src/scanner.mjs'
 import { runConvertPlan } from '../src/convert-run.mjs'
 import { buildIndex } from '../src/indexer.mjs'
+import { askKb } from '../src/ask.mjs'
 
 program.name('llm-wiki').description('Compile messy directories into an llm_wiki knowledge base')
 
@@ -40,6 +41,21 @@ program.command('index')
   .action((opts) => {
     const r = buildIndex(opts.kb)
     console.log(`indexed ${r.pageCount} pages${r.topicsSplit ? ' (split into topics/)' : ''}`)
+  })
+
+program.command('ask <question>')
+  .description('answer a question from the knowledge base (full pages, never chunks)')
+  .option('--kb <dir>', 'knowledge base root', '.')
+  .option('-k <n>', 'pages to load', '6')
+  .option('--retrieve-only', 'print located pages without calling the LLM')
+  .action(async (question, opts) => {
+    const r = await askKb(opts.kb, question, { k: Number(opts.k), retrieveOnly: opts.retrieveOnly })
+    if (opts.retrieveOnly) {
+      for (const h of r.pages) console.log(`${h.score.toFixed(2)}  ${h.relPath}`)
+    } else {
+      console.log(r.answer)
+      console.log(`\n--- pages used: ${r.pages.map(h => h.relPath).join(', ')}`)
+    }
   })
 
 program.parseAsync().catch((err) => { console.error(err.message); process.exit(1) })
