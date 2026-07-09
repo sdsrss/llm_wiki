@@ -2,7 +2,6 @@
   "name": "llm-wiki",
   "version": "0.1.0",
   "description": "",
-  "main": "index.js",
   "directories": {
     "test": "test"
   },
@@ -17,7 +16,7 @@
     "llm-wiki": "./bin/llm-wiki.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19.0"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
