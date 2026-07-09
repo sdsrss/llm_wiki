@@ -2,6 +2,7 @@
 import { program } from 'commander'
 import { initKb } from '../src/init.mjs'
 import { scanSource } from '../src/scanner.mjs'
+import { runConvertPlan } from '../src/convert-run.mjs'
 
 program.name('llm-wiki').description('Compile messy directories into an llm_wiki knowledge base')
 
@@ -21,6 +22,15 @@ program.command('scan <srcDir>')
     console.log(`incremental: +${r.incremental.added} ~${r.incremental.changed} -${r.incremental.removed} =${r.incremental.unchanged}`)
     console.log(`compile plan: ${r.batches.length} batches -> ~${r.estimate.inputTokens} in / ~${r.estimate.outputTokens} out tokens`)
     console.log(`plan saved to ${opts.kb}/.scan-plan.json`)
+  })
+
+program.command('convert')
+  .description('convert files from the scan plan into raw/ markdown')
+  .option('--kb <dir>', 'knowledge base root', '.')
+  .action(async (opts) => {
+    const r = await runConvertPlan(opts.kb)
+    console.log(`converted ${r.converted.length}, failed ${r.failed.length}`)
+    for (const f of r.failed) console.log(`  FAILED ${f.src}: ${f.warnings.join('; ')}`)
   })
 
 program.parseAsync().catch((err) => { console.error(err.message); process.exit(1) })
