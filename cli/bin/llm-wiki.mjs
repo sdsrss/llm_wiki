@@ -3,6 +3,7 @@ import { program } from 'commander'
 import { initKb } from '../src/init.mjs'
 import { scanSource } from '../src/scanner.mjs'
 import { runConvertPlan } from '../src/convert-run.mjs'
+import { buildIndex } from '../src/indexer.mjs'
 
 program.name('llm-wiki').description('Compile messy directories into an llm_wiki knowledge base')
 
@@ -31,6 +32,14 @@ program.command('convert')
     const r = await runConvertPlan(opts.kb)
     console.log(`converted ${r.converted.length}, failed ${r.failed.length}`)
     for (const f of r.failed) console.log(`  FAILED ${f.src}: ${f.warnings.join('; ')}`)
+  })
+
+program.command('index')
+  .description('rebuild index.md, graph.json and llms.txt from page frontmatter')
+  .option('--kb <dir>', 'knowledge base root', '.')
+  .action((opts) => {
+    const r = buildIndex(opts.kb)
+    console.log(`indexed ${r.pageCount} pages${r.topicsSplit ? ' (split into topics/)' : ''}`)
   })
 
 program.parseAsync().catch((err) => { console.error(err.message); process.exit(1) })
