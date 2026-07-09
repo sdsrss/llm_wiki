@@ -18,11 +18,12 @@ export function connectProject(projectDir, { kb, role = 'project', remove = fals
   fs.writeFileSync(regFile, JSON.stringify(registry, null, 2) + '\n')
 
   const mdFile = path.join(projectDir, 'CLAUDE.md')
-  let md = fs.existsSync(mdFile) ? fs.readFileSync(mdFile, 'utf8') : ''
+  const mdExists = fs.existsSync(mdFile)
+  let md = mdExists ? fs.readFileSync(mdFile, 'utf8') : ''
   const blockRe = new RegExp(`\\n?${BEGIN}[\\s\\S]*?${END}\\n?`)
   md = md.replace(blockRe, '\n')
   if (registry.kbs.length > 0) md = md.trimEnd() + '\n\n' + renderBlock(registry.kbs) + '\n'
-  fs.writeFileSync(mdFile, md)
+  if (mdExists || registry.kbs.length > 0) fs.writeFileSync(mdFile, md)
   return { registry }
 }
 

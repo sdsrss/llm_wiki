@@ -98,7 +98,7 @@ program.command('install-skills')
   .description('copy the wiki-* skills into a .claude directory')
   .option('--target <dir>', 'target .claude directory', './.claude')
   .action((opts) => {
-    const repoSkills = path.resolve(fileURLToPath(import.meta.url), '../../..', 'skills')
+    const repoSkills = path.resolve(fileURLToPath(import.meta.url), '../..', 'skills')
     const { installed } = installSkills(opts.target, repoSkills)
     console.log(`installed skills: ${installed.join(', ')}`)
   })

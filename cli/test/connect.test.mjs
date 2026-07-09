@@ -38,3 +38,9 @@ test('connect creates CLAUDE.md when absent', (t) => {
   connectProject(proj, { kb: './kb', role: 'project' })
   assert.match(fs.readFileSync(path.join(proj, 'CLAUDE.md'), 'utf8'), /llm-wiki:begin/)
 })
+
+test('no-op remove on fresh project does not create CLAUDE.md', (t) => {
+  const proj = tmp(t)
+  connectProject(proj, { kb: './kb', remove: true })
+  assert.ok(!fs.existsSync(path.join(proj, 'CLAUDE.md')), 'CLAUDE.md must stay absent')
+})
