@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { program } from 'commander'
 import { initKb } from '../src/init.mjs'
 import { scanSource } from '../src/scanner.mjs'
@@ -7,6 +9,7 @@ import { buildIndex } from '../src/indexer.mjs'
 import { askKb } from '../src/ask.mjs'
 import { lintKb } from '../src/lint.mjs'
 import { statusKb } from '../src/status.mjs'
+import { connectProject, installSkills } from '../src/connect.mjs'
 
 program.name('llm-wiki').description('Compile messy directories into an llm_wiki knowledge base')
 
@@ -79,6 +82,25 @@ program.command('status')
     const s = await statusKb(opts.kb, opts.src)
     if (s.incremental) console.log(`src diff: +${s.incremental.added} ~${s.incremental.changed} -${s.incremental.removed} =${s.incremental.unchanged}`)
     console.log(s.uncompiledRaw.length ? `uncompiled raw:\n  ${s.uncompiledRaw.join('\n  ')}` : 'all raw files compiled')
+  })
+
+program.command('connect <projectDir>')
+  .description('register a knowledge base into a project CLAUDE.md (sentinel block)')
+  .requiredOption('--kb <path>', 'knowledge base path (as the project should reference it)')
+  .option('--role <role>', 'project | reference', 'project')
+  .option('--remove', 'detach this kb')
+  .action((projectDir, opts) => {
+    const { registry } = connectProject(projectDir, { kb: opts.kb, role: opts.role, remove: opts.remove })
+    console.log(`registered kbs: ${registry.kbs.map(k => `${k.role}:${k.path}`).join(', ') || 'none'}`)
+  })
+
+program.command('install-skills')
+  .description('copy the wiki-* skills into a .claude directory')
+  .option('--target <dir>', 'target .claude directory', './.claude')
+  .action((opts) => {
+    const repoSkills = path.resolve(fileURLToPath(import.meta.url), '../../..', 'skills')
+    const { installed } = installSkills(opts.target, repoSkills)
+    console.log(`installed skills: ${installed.join(', ')}`)
   })
 
 program.parseAsync().catch((err) => { console.error(err.message); process.exit(1) })
