@@ -71,6 +71,17 @@
 ### Removed
 
 - `serializeFrontmatter` (dead export, no production callers).
+- **`rawDir` / `schemaFile` pseudo-config keys.** They were accepted by
+  `kbPaths` but never wired through the 12 call sites, so setting them in
+  `wiki.config.json` silently did nothing; `init` never emitted them either.
+  The KB layout is fixed: `raw/` and `AGENTS.md`. A hand-added key remains
+  ignored, exactly as before — no KB changes needed.
+
+### Fixed (misc)
+
+- `connect --remove` on a project that was never connected no longer leaves
+  an empty `.llm-wiki.json` behind (same guard CLAUDE.md already had);
+  a corrupt registry file now errors with the file named.
 
 ## 0.2.0 (2026-07-10)
 
