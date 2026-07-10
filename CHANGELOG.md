@@ -9,6 +9,15 @@
 
 ### Fixed (audit batch, 2026-07-10)
 
+- **fix: corrupt or stale state files now fail with the file named in the
+  error.** `.manifest.json` / `.scan-plan.json` / `wiki.config.json` parse
+  failures no longer surface as bare `SyntaxError`s; a missing or
+  hand-edited scan plan says to re-run `llm-wiki scan` (a stale batch entry
+  fails just that entry, not the run). Corrupt `~/.llm-wiki/config.json`
+  errors are redacted — V8's JSON error quotes the input, which could echo
+  an API-key fragment to the terminal. `wiki.config.json` reading is
+  consolidated into one `loadKbConfig` shared by scan/lint/index/ask.
+
 - **fix: `index` no longer swallows user sections added after "Pending
   concepts".** The pending section is now bounded at the next `## ` heading;
   anything after it is carried over verbatim on rebuild. `lint` uses the same
