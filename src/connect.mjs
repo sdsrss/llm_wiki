@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { readJsonFile } from './json.mjs'
 
 const BEGIN = '<!-- llm-wiki:begin -->'
 const END = '<!-- llm-wiki:end -->'
@@ -12,13 +13,16 @@ function renderBlock(kbs) {
 
 export function connectProject(projectDir, { kb, role = 'project', remove = false }) {
   const regFile = path.join(projectDir, '.llm-wiki.json')
-  const registry = fs.existsSync(regFile) ? JSON.parse(fs.readFileSync(regFile, 'utf8')) : { kbs: [] }
+  const regExists = fs.existsSync(regFile)
+  const registry = regExists ? readJsonFile(regFile) : { kbs: [] }
   // Match by resolved absolute path so `./kb`, `kb`, and the absolute form are one entry;
   // store the user-provided form verbatim (that is what gets rendered into CLAUDE.md).
   const same = (a, b) => path.resolve(projectDir, a) === path.resolve(projectDir, b)
   registry.kbs = registry.kbs.filter(k => !same(k.path, kb))
   if (!remove) registry.kbs.push({ path: kb, role })
-  fs.writeFileSync(regFile, JSON.stringify(registry, null, 2) + '\n')
+  // Same guard as CLAUDE.md below: a no-op remove on a fresh project must not
+  // leave an empty registry file behind.
+  if (regExists || registry.kbs.length > 0) fs.writeFileSync(regFile, JSON.stringify(registry, null, 2) + '\n')
 
   const mdFile = path.join(projectDir, 'CLAUDE.md')
   const mdExists = fs.existsSync(mdFile)
