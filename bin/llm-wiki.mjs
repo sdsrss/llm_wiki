@@ -6,6 +6,7 @@ import { initKb } from '../src/init.mjs'
 import { scanSource } from '../src/scanner.mjs'
 import { runConvertPlan } from '../src/convert-run.mjs'
 import { buildIndex } from '../src/indexer.mjs'
+import { embedKb } from '../src/embed.mjs'
 import { askKb } from '../src/ask.mjs'
 import { lintKb } from '../src/lint.mjs'
 import { statusKb } from '../src/status.mjs'
@@ -48,6 +49,14 @@ program.command('index')
   .action((opts) => {
     const r = buildIndex(opts.kb)
     console.log(`indexed ${r.pageCount} pages${r.topicsSplit ? ' (split into topics/)' : ''}`)
+  })
+
+program.command('embed')
+  .description('compute/update page embeddings into wiki/.vectors.json (needs embeddingModel in ~/.llm-wiki/config.json)')
+  .option('--kb <dir>', 'knowledge base root', '.')
+  .action(async (opts) => {
+    const r = await embedKb(opts.kb)
+    console.log(`embedded ${r.embedded}, reused ${r.reused}, pruned ${r.pruned} (model ${r.model}, dim ${r.dim})`)
   })
 
 program.command('ask <question>')

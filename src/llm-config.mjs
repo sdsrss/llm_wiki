@@ -18,7 +18,7 @@ function resolveProviders(fileCfg) {
     const prov = providers[name]
     if (!prov) continue
     const key = prov.apiKey ?? process.env[prov.apiKeyEnv]
-    if (key) return { baseURL: prov.baseURL, apiKey: key, model: prov.model }
+    if (key) return { baseURL: prov.baseURL, apiKey: key, model: prov.model, ...(prov.embeddingModel ? { embeddingModel: prov.embeddingModel } : {}) }
   }
   return null
 }
@@ -31,7 +31,7 @@ export function loadLlmConfig(kbRoot) {
   const fileCfg = fs.existsSync(globalFile) ? readJsonFile(globalFile, { redactContents: true }) : {}
   // flat form: explicit custom endpoint wins outright
   let cfg = (fileCfg.baseURL && fileCfg.apiKey && fileCfg.model)
-    ? { baseURL: fileCfg.baseURL, apiKey: fileCfg.apiKey, model: fileCfg.model }
+    ? { baseURL: fileCfg.baseURL, apiKey: fileCfg.apiKey, model: fileCfg.model, ...(fileCfg.embeddingModel ? { embeddingModel: fileCfg.embeddingModel } : {}) }
     : resolveProviders(fileCfg)
   const p = kbPaths(kbRoot)
   if (fs.existsSync(p.config)) {
