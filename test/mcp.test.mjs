@@ -53,3 +53,57 @@ test('wiki_overview errors with guidance when no index exists', async (t) => {
   assert.equal(r.isError, true)
   assert.match(r.content[0].text, /llm-wiki index/, 'tells the caller how to build the index')
 })
+
+test('wiki_search returns ids + metadata, never full page text', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const client = await connectClient(t, d)
+  const r = await client.callTool({ name: 'wiki_search', arguments: { query: '三层架构' } })
+  const text = r.content[0].text
+  assert.match(text, /sources\/karpathy-gist/)
+  assert.match(text, /three layers/, 'description shown')
+  assert.doesNotMatch(text, /ingest、query、lint/, 'body text must NOT leak into search results')
+})
+
+test('wiki_search zero hits returns guidance, not an error', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const client = await connectClient(t, d)
+  const r = await client.callTool({ name: 'wiki_search', arguments: { query: 'zzz-no-such-term' } })
+  assert.equal(r.isError ?? false, false)
+  assert.match(r.content[0].text, /wiki_overview/, 'points the agent at the fallback path')
+})
+
+test('wiki_read_page returns the whole page for a valid id', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const client = await connectClient(t, d)
+  const r = await client.callTool({ name: 'wiki_read_page', arguments: { id: 'sources/karpathy-gist' } })
+  const text = r.content[0].text
+  assert.match(text, /三层架构：raw sources/, 'full body present')
+  assert.match(text, /type: source/, 'frontmatter present')
+})
+
+test('wiki_read_page rejects unknown ids and path traversal', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(d, 'secret.txt'), 'top secret')
+  const client = await connectClient(t, d)
+  for (const id of ['nope/missing', '../secret.txt', '../../etc/passwd', 'sources/../../secret']) {
+    const r = await client.callTool({ name: 'wiki_read_page', arguments: { id } })
+    assert.equal(r.isError, true, `id ${id} must be rejected`)
+    assert.doesNotMatch(r.content[0].text, /top secret/)
+  }
+})
+
+test('wiki_read_page blocks invalidated pages unless include_invalidated', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const client = await connectClient(t, d)
+  const blocked = await client.callTool({ name: 'wiki_read_page', arguments: { id: 'concepts/old-idea' } })
+  assert.equal(blocked.isError, true)
+  assert.match(blocked.content[0].text, /superseded by sources\/karpathy-gist/)
+  const forced = await client.callTool({ name: 'wiki_read_page', arguments: { id: 'concepts/old-idea', include_invalidated: true } })
+  assert.equal(forced.isError ?? false, false)
+  assert.match(forced.content[0].text, /已失效的旧概念内容/)
+})
