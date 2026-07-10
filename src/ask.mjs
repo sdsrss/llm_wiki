@@ -44,12 +44,21 @@ export async function locatePages(kbRoot, question, { k = 6, fetchImpl } = {}) {
   if (!store) return asBm25()
   const cfg = loadLlmConfig(kbRoot)
   if (!cfg?.embeddingModel) return asBm25()
+  // A store built by a different embeddingModel lives in a foreign vector space:
+  // fusing it produces silent garbage, so treat it as missing (not a failure).
+  if (store.model !== cfg.embeddingModel) return asBm25()
   try {
     const t = fetchImpl ? { fetchImpl, dispatcher: undefined } : await makeTransport()
     const [qv] = await embedTexts(cfg, t, [question])
     const qn = normalize(qv)
     const vecHits = qn ? cosineTopK(qn, store, k).map(v => ({ relPath: v.id, score: v.score })) : []
-    return { hits: rrfFuse([{ source: 'bm25', hits: bm25 }, { source: 'vector', hits: vecHits }], k), usedVector: true }
+    // The store is a snapshot from the last embed; pages invalidated, deleted, or
+    // renamed since then still have vectors. Keep only hits that map to a live,
+    // non-invalidated page so retired knowledge cannot resurface (and askKb never
+    // ENOENTs reading a vanished file).
+    const valid = new Set(listWikiPages(kbRoot).filter(pg => !pg.error && !isInvalidated(pg)).map(pg => pg.relPath))
+    const vecHitsValid = vecHits.filter(h => valid.has(h.relPath))
+    return { hits: rrfFuse([{ source: 'bm25', hits: bm25 }, { source: 'vector', hits: vecHitsValid }], k), usedVector: true }
   } catch (err) {
     process.stderr.write(`warning: vector retrieval unavailable (${err.message}); falling back to BM25\n`)
     return asBm25()

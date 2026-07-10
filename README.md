@@ -45,7 +45,8 @@ Retrieval is lexical (BM25). When it finds nothing — typically a question
 asked in a different language than the KB pages, or fully rephrased — `ask`
 falls back to letting the model pick pages from the KB listing
 (`llms.txt`), then answers from those pages as usual; only ids of real,
-non-invalidated pages are accepted. `--retrieve-only` stays pure BM25.
+non-invalidated pages are accepted. `--retrieve-only` stays pure BM25 while
+vector location is off (the default).
 Pages are always sent whole; when the selected pages exceed
 `askTokenBudget` (`wiki.config.json`, default 32000), the lowest-ranked
 pages are dropped, never truncated.

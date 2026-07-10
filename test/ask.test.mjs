@@ -352,6 +352,78 @@ test('askKb retrieveOnly carries source labels through locatePages', async (t) =
   assert.deepEqual(r.pages[0].sources, ['bm25'])
 })
 
+// The vector store is a snapshot from the last `llm-wiki embed`; pages can be
+// invalidated, deleted, or renamed on disk afterward. A stale entry must never
+// resurrect retired knowledge or crash retrieval with ENOENT downstream.
+test('locatePages drops vector hits for pages invalidated after embed (no resurrection)', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/sources/stale.md'),
+    `---\ntype: source\ntitle: Stale page\ndescription: retired knowledge\ntags: [stale]\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: invalidated\ninvalidated: 2026-07-09\nsuperseded_by: sources/karpathy-gist\n---\n\nстарые данные`)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true }))
+  saveVectorStore(d, { model: 'emb-1', dim: 2, pages: {
+    'sources/stale.md': { hash: 'h', vec: [1, 0] },
+    'sources/other.md': { hash: 'h', vec: [0, 1] },
+  } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-1' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  // query embedding points squarely at the (now invalidated) stale page
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ data: [{ index: 0, embedding: [1, 0] }] }) })
+  const r = await locatePages(d, 'что это такое', { fetchImpl })
+  assert.ok(!r.hits.some(h => h.relPath === 'sources/stale.md'),
+    'an invalidated page must not resurface through the stale vector store')
+})
+
+test('locatePages drops vector hits whose file no longer exists on disk (no ENOENT)', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true }))
+  saveVectorStore(d, { model: 'emb-1', dim: 2, pages: {
+    'sources/ghost.md': { hash: 'h', vec: [1, 0] },
+    'sources/other.md': { hash: 'h', vec: [0, 1] },
+  } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-1' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ data: [{ index: 0, embedding: [1, 0] }] }) })
+  const r = await locatePages(d, 'что это такое', { fetchImpl })
+  assert.ok(!r.hits.some(h => h.relPath === 'sources/ghost.md'),
+    'a store entry with no backing file must not appear in hits')
+})
+
+test('locatePages ignores a vector store built by a different embeddingModel (silent gate)', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true }))
+  saveVectorStore(d, { model: 'other-model', dim: 2, pages: {
+    'sources/karpathy-gist.md': { hash: 'h', vec: [1, 0] },
+    'sources/other.md': { hash: 'h', vec: [0, 1] },
+  } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-1' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  const warnings = []
+  const orig = process.stderr.write.bind(process.stderr)
+  process.stderr.write = (s) => { warnings.push(String(s)); return true }
+  t.after(() => { process.stderr.write = orig })
+  let called = false
+  const fetchImpl = async () => { called = true; return { ok: true, json: async () => ({ data: [{ index: 0, embedding: [1, 0] }] }) } }
+  const r = await locatePages(d, '三层架构有哪些', { fetchImpl })
+  assert.equal(r.usedVector, false)
+  assert.ok(r.hits.every(h => h.sources.length === 1 && h.sources[0] === 'bm25'),
+    'a foreign-model store must yield BM25-only labels')
+  assert.equal(called, false, 'model-mismatch store must be treated as missing before any embedding call')
+  assert.ok(!warnings.some(w => w.includes('vector retrieval unavailable')),
+    'silent gate — not the fail-open warning path')
+})
+
 test('makeTransport: global fetch without proxy, undici fetch + dispatcher with proxy', async (t) => {
   const PROXY_VARS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']
   const saved = Object.fromEntries(PROXY_VARS.map(v => [v, process.env[v]]))
