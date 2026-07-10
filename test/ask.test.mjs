@@ -69,6 +69,51 @@ function llmEnv(t, d) {
   t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
 }
 
+// 'почему' produces zero BM25 tokens (tokenizer covers latin + CJK only),
+// guaranteeing the lexical zero-hit path in every fallback test below.
+test('askKb falls back to model page selection from the listing when BM25 finds nothing', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  llmEnv(t, d)
+  const calls = []
+  const fetchImpl = async (_url, opts) => {
+    calls.push(JSON.parse(opts.body))
+    return calls.length === 1
+      ? { ok: true, json: async () => ({ choices: [{ message: { content: 'wiki/sources/karpathy-gist.md' } }] }) }
+      : { ok: true, json: async () => ({ choices: [{ message: { content: '答案 [[sources/karpathy-gist]]' } }] }) }
+  }
+  const r = await askKb(d, 'почему', { fetchImpl })
+  assert.equal(calls.length, 2, 'one selection call + one answer call')
+  assert.match(calls[0].messages[1].content, /Knowledge base listing/)
+  assert.equal(r.fallback, 'index')
+  assert.deepEqual(r.pages.map(h => h.relPath), ['sources/karpathy-gist.md'])
+  assert.match(calls[1].messages[1].content, /三层架构：raw sources/, 'selected page loaded whole into the answer prompt')
+})
+
+test('askKb fallback rejects when the model selects no valid page', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  llmEnv(t, d)
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: 'NONE' } }] }) })
+  await assert.rejects(() => askKb(d, 'почему', { fetchImpl }), /fallback selected no pages/)
+})
+
+test('askKb fallback drops hallucinated ids and keeps only real pages', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  llmEnv(t, d)
+  let answered = false
+  const fetchImpl = async () => {
+    if (!answered) {
+      answered = true
+      return { ok: true, json: async () => ({ choices: [{ message: { content: 'entities/ghost\n../../etc/passwd\nsources/other' } }] }) }
+    }
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) }
+  }
+  const r = await askKb(d, 'почему', { fetchImpl })
+  assert.deepEqual(r.pages.map(h => h.relPath), ['sources/other.md'], 'only the real page survives validation')
+})
+
 test('askKb surfaces the error body on non-ok responses', async (t) => {
   const d = tmp(t)
   seedKb(d)

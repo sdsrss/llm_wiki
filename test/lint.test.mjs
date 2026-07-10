@@ -236,6 +236,19 @@ test('promote-concepts accepts hyphen and en-dash pending lines', async (t) => {
   assert.ok(promos.some(s => s.detail.includes('retrieval (2 sources)')), 'en-dash line counted')
 })
 
+test('promote-concepts ignores list items in user sections after Pending', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const idx = fs.readFileSync(path.join(d, 'wiki/index.md'), 'utf8')
+  fs.writeFileSync(path.join(d, 'wiki/index.md'), idx
+    + '- real-pending — [[sources/a]], [[sources/b]]\n\n'
+    + '## My notes\n- not-a-concept — [[sources/a]], [[sources/b]]\n')
+  const r = await lintKb(d)
+  const promos = r.semantic.filter(s => s.task === 'promote-concepts')
+  assert.ok(promos.some(s => s.detail.includes('real-pending')))
+  assert.ok(!promos.some(s => s.detail.includes('not-a-concept')), 'user-section item must not be treated as pending')
+})
+
 test('lintKb stale-scan skips invalidated pages', async (t) => {
   const d = tmp(t)
   initKb(d)

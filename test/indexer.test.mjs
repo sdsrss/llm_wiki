@@ -39,6 +39,22 @@ test('buildIndex writes index.md preserving pending, graph.json, llms.txt', (t) 
   assert.match(fs.readFileSync(path.join(d, 'llms.txt'), 'utf8'), /wiki\/sources\/art\.md/)
 })
 
+test('buildIndex bounds the pending section and preserves user sections after it', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/sources/art.md'), page('source', 'Article'))
+  fs.appendFileSync(path.join(d, 'wiki/index.md'),
+    '- pending-concept — [[sources/art]]\n\n## My reading notes\nhand-written, not yours to manage\n')
+  buildIndex(d)
+  buildIndex(d) // second rebuild: the greedy-match bug only compounds across rebuilds
+  const idx = fs.readFileSync(path.join(d, 'wiki/index.md'), 'utf8')
+  assert.match(idx, /pending-concept/)
+  assert.equal(idx.match(/## My reading notes/g).length, 1, 'user section survives rebuilds exactly once')
+  assert.match(idx, /hand-written, not yours to manage/)
+  const pendingSection = idx.match(/## Pending concepts([\s\S]*?)(?=\n## |$)/)[1]
+  assert.ok(!pendingSection.includes('reading notes'), 'user section is not absorbed into pending')
+})
+
 test('buildIndex routes unknown types to an Other section, graph keeps raw type', (t) => {
   const d = tmp(t)
   initKb(d)
