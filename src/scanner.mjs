@@ -48,9 +48,11 @@ export async function scanSource(srcDir, kbRoot, { exclude = [], persist = true 
     if (TEXT_EXTS.includes(ext)) {
       const text = fs.readFileSync(abs, 'utf8')
       entry.tokens = estimateTokens(text)
+      const sample = text.slice(0, 2000)
       let cjk = 0
-      for (const ch of text.slice(0, 2000)) if (/[　-鿿]/.test(ch)) cjk++
-      entry.lang = cjk / Math.min(text.length, 2000) > 0.2 ? 'zh' : 'en'
+      for (const ch of sample) if (/[　-鿿]/.test(ch)) cjk++
+      // Explicit empty guard: 0/0 is NaN, which only accidentally compares as 'en'.
+      entry.lang = sample.length > 0 && cjk / sample.length > 0.2 ? 'zh' : 'en'
       // Near-dup guard: minhash of very short normalized text degenerates to an
       // all-zero signature, making unrelated tiny files compare as identical.
       // Only sign when the normalized text is long enough to yield 5-char shingles.
