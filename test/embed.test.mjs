@@ -91,9 +91,11 @@ test('embedKb is incremental: reuses unchanged, prunes removed/invalidated, re-e
   const r2 = await embedKb(d, { fetchImpl: f2.fetchImpl })
   assert.deepEqual({ embedded: r2.embedded, reused: r2.reused }, { embedded: 0, reused: 2 })
   assert.equal(f2.calls.length, 0)
-  // invalidate b -> pruned from store
-  const b = fs.readFileSync(path.join(d, 'wiki/sources/b.md'), 'utf8')
-  fs.writeFileSync(path.join(d, 'wiki/sources/b.md'), b.replace('---\n\n', 'status: invalidated\n---\n\n').replace('tags: [x]', 'tags: [x]\nstatus: invalidated'))
+  // invalidate b -> pruned from store. Rewrite the whole file with a single
+  // clean `status: invalidated` key so the isInvalidated() prune path is what
+  // excludes b — not a bad-frontmatter parse error.
+  fs.writeFileSync(path.join(d, 'wiki/sources/b.md'),
+    '---\ntype: source\ntitle: B\ndescription: desc B\ntags: [x]\nstatus: invalidated\ncreated: 2026-07-10\nupdated: 2026-07-10\n---\n\nbeta body')
   const r3 = await embedKb(d, { fetchImpl: fakeEmbed(() => [1, 0]).fetchImpl })
   assert.equal(r3.pruned, 1)
   assert.equal(loadVectorStore(d).pages['sources/b.md'], undefined)
