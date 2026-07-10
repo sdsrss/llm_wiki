@@ -44,7 +44,9 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
   }
 
   if (fs.existsSync(p.indexMd)) {
-    const pendingSection = fs.readFileSync(p.indexMd, 'utf8').match(/## Pending concepts([\s\S]*)$/)?.[1] ?? ''
+    // Bounded at the next `## ` heading (same rule as buildIndex) so entries in
+    // user-added sections after Pending are not counted as pending concepts.
+    const pendingSection = fs.readFileSync(p.indexMd, 'utf8').match(/## Pending concepts([\s\S]*?)(?=\n## |$)/)?.[1] ?? ''
     for (const line of pendingSection.split('\n')) {
       // Dash flavors: em/en dash with optional space, or a space-delimited hyphen
       // (`- foo - [[a]]`) — a bare `-` would stop inside hyphenated names like multi-agent.

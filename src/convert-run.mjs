@@ -11,6 +11,15 @@ function uniquePath(dir, slug) {
   return candidate
 }
 
+function uniqueOriginalPath(dir, base) {
+  const ext = path.extname(base)
+  const stem = base.slice(0, base.length - ext.length)
+  let candidate = path.join(dir, base)
+  let n = 2
+  while (fs.existsSync(candidate)) candidate = path.join(dir, `${stem}-${n++}${ext}`)
+  return candidate
+}
+
 export async function runConvertPlan(kbRoot) {
   const p = kbPaths(kbRoot)
   const plan = JSON.parse(fs.readFileSync(p.scanPlan, 'utf8'))
@@ -33,13 +42,25 @@ export async function runConvertPlan(kbRoot) {
       : uniquePath(p.raw, slugify(path.basename(rel)))
     fs.writeFileSync(rawAbs, markdown)
     const ext = path.extname(rel).toLowerCase()
+    let originalRel
     if (ext !== '.md' && ext !== '.markdown') {
       const origDir = path.join(p.raw, '_originals')
       fs.mkdirSync(origDir, { recursive: true })
-      fs.copyFileSync(srcAbs, path.join(origDir, path.basename(rel)))
+      // Same-basename sources from different dirs must not clobber each other's
+      // originals; a re-convert reuses the path recorded in the manifest.
+      const origAbs = prev?.original && fs.existsSync(path.join(kbRoot, prev.original))
+        ? path.join(kbRoot, prev.original)
+        : uniqueOriginalPath(origDir, path.basename(rel))
+      fs.copyFileSync(srcAbs, origAbs)
+      originalRel = path.relative(kbRoot, origAbs)
     }
     const rawRel = path.relative(kbRoot, rawAbs)
-    manifest.files[rel] = { hash: entry.hash, raw: rawRel, convertedAt: new Date().toISOString().slice(0, 10) }
+    manifest.files[rel] = {
+      hash: entry.hash,
+      raw: rawRel,
+      convertedAt: new Date().toISOString().slice(0, 10),
+      ...(originalRel ? { original: originalRel } : {}),
+    }
     converted.push({ src: rel, raw: rawRel })
   }
   saveManifest(kbRoot, manifest)

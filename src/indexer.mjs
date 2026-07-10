@@ -22,11 +22,19 @@ export function buildIndex(kbRoot) {
   const cfg = fs.existsSync(p.config) ? { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(p.config, 'utf8')) } : DEFAULT_CONFIG
   const pages = listWikiPages(kbRoot).filter(pg => !pg.error)
 
-  // preserve pending section
+  // Preserve the pending section, bounded at the next `## ` heading — a greedy
+  // match to EOF would swallow user-added sections into "pending" forever.
+  // Anything after the pending section is carried over verbatim as a tail.
   let pending = '## Pending concepts\n'
+  let tail = ''
   if (fs.existsSync(p.indexMd)) {
-    const m = fs.readFileSync(p.indexMd, 'utf8').match(/## Pending concepts[\s\S]*$/)
-    if (m) pending = m[0].trimEnd() + '\n'
+    const text = fs.readFileSync(p.indexMd, 'utf8')
+    const m = text.match(/## Pending concepts[\s\S]*?(?=\n## |$)/)
+    if (m) {
+      pending = m[0].trimEnd() + '\n'
+      const after = text.slice(m.index + m[0].length).replace(/^\n+/, '')
+      if (after.trim()) tail = '\n' + after.trimEnd() + '\n'
+    }
   }
 
   // `other` collects unknown types so index.md and graph.json agree on a page's bucket
@@ -56,7 +64,7 @@ export function buildIndex(kbRoot) {
       indexBody += `\n## ${SECTION_TITLES[type]}\n${list.map(line).join('\n')}\n`
     }
   }
-  fs.writeFileSync(p.indexMd, `${indexBody}\n${pending}`)
+  fs.writeFileSync(p.indexMd, `${indexBody}\n${pending}${tail}`)
 
   const ids = new Set(pages.map(pg => pg.relPath.replace(/\.md$/, '')))
   const nodes = pages.map(pg => ({
