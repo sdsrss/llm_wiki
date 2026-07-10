@@ -31,6 +31,6 @@ export function validatePage(page) {
   for (const k of REQUIRED) {
     if (page.data[k] === undefined || page.data[k] === null || page.data[k] === '') issues.push(`missing field: ${k}`)
   }
-  if (page.data.type !== 'source' && !Array.isArray(page.data.sources)) issues.push('missing field: sources (evidence chain)')
+  if (!Array.isArray(page.data.sources)) issues.push('missing field: sources (evidence chain)')
   return issues
 }

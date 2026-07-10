@@ -18,7 +18,7 @@ test('lintKb finds mechanical issues and semantic candidates', async (t) => {
   initKb(d)
   fs.writeFileSync(path.join(d, 'raw/exists.md'), 'raw')
   fs.writeFileSync(path.join(d, 'wiki/sources/a.md'),
-    `---\ntype: source\ntitle: A\ndescription: d\ntags: [x]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nlink [[entities/ghost]]`)
+    `---\ntype: source\ntitle: A\ndescription: d\ntags: [x]\nsources: [raw/exists.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nlink [[entities/ghost]]`)
   fs.writeFileSync(path.join(d, 'wiki/entities/e.md'),
     `---\ntype: entity\ntitle: E\ndescription: d\ntags: [x]\nsources: [raw/missing.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nbody`)
   fs.writeFileSync(path.join(d, 'wiki/concepts/c.md'), 'no frontmatter at all')

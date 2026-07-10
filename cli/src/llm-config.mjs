@@ -33,7 +33,19 @@ export function loadLlmConfig(kbRoot) {
   const p = kbPaths(kbRoot)
   if (fs.existsSync(p.config)) {
     const kbCfg = JSON.parse(fs.readFileSync(p.config, 'utf8'))
-    if (kbCfg.llm) cfg = { ...(cfg ?? {}), ...kbCfg.llm }
+    if (kbCfg.llm) {
+      if (process.env.LLM_WIKI_ALLOW_KB_LLM_OVERRIDE === '1') {
+        // Opt-in: trust the KB fully (e.g. your own first-party KB).
+        cfg = { ...(cfg ?? {}), ...kbCfg.llm }
+      } else {
+        // Security: a third-party KB must not redirect requests (baseURL) or
+        // inject credentials — that would leak the user's env API key to an
+        // attacker endpoint. Honor only the model name by default.
+        const ignored = Object.keys(kbCfg.llm).filter(key => key !== 'model')
+        if (ignored.length) process.stderr.write(`warning: ignoring kb-level llm.${ignored.join(',')} override (security); set LLM_WIKI_ALLOW_KB_LLM_OVERRIDE=1 to allow\n`)
+        if (kbCfg.llm.model !== undefined) cfg = { ...(cfg ?? {}), model: kbCfg.llm.model }
+      }
+    }
   }
   if (cfg && process.env.LLM_WIKI_API_KEY) cfg.apiKey = process.env.LLM_WIKI_API_KEY
   if (!cfg || !cfg.baseURL || !cfg.apiKey || !cfg.model) return null

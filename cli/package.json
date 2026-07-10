@@ -1,17 +1,22 @@
 {
   "name": "llm-wiki",
   "version": "0.1.0",
-  "description": "",
+  "description": "Compile messy document directories into Karpathy-style llm_wiki knowledge bases — standalone Q&A CLI + Claude Code/Codex skills",
   "directories": {
     "test": "test"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["llm-wiki", "knowledge-base", "karpathy", "claude-code", "agents", "rag-alternative", "markdown"],
+  "author": "sds.rs",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sdsrss/llm_wiki.git"
+  },
+  "files": ["bin", "src", "skills", "README.md"],
   "bin": {
     "llm-wiki": "./bin/llm-wiki.mjs"
   },

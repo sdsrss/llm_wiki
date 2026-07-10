@@ -23,7 +23,7 @@ This file is the contract for any LLM maintaining this knowledge base.
 ## Page types (wiki/<type>/<slug>.md)
 Every page: YAML frontmatter + a complete, self-contained markdown body.
 Required frontmatter: type, title, description, tags, created, updated.
-All types except source also require: sources (list of raw/... paths — the evidence chain).
+Every page also requires: sources (list of raw/... paths — the evidence chain). A source page lists its single raw/ file; every other page lists every raw/ file backing its claims.
 
 | type | dir | rule |
 |---|---|---|

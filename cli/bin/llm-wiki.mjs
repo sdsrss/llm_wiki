@@ -54,7 +54,9 @@ program.command('ask <question>')
   .option('-k <n>', 'pages to load', '6')
   .option('--retrieve-only', 'print located pages without calling the LLM')
   .action(async (question, opts) => {
-    const r = await askKb(opts.kb, question, { k: Number(opts.k), retrieveOnly: opts.retrieveOnly })
+    const k = Number.parseInt(opts.k, 10)
+    if (!Number.isFinite(k) || k < 1) { console.error(`invalid -k value: ${opts.k} (expected a positive integer)`); process.exit(1) }
+    const r = await askKb(opts.kb, question, { k, retrieveOnly: opts.retrieveOnly })
     if (opts.retrieveOnly) {
       for (const h of r.pages) console.log(`${h.score.toFixed(2)}  ${h.relPath}`)
     } else {

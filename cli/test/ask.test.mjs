@@ -51,6 +51,16 @@ test('askKb sends full pages to the LLM and returns answer', async (t) => {
   assert.match(prompt, /三层架构：raw sources/, 'full page text must be in the prompt')
 })
 
+test('askKb rejects when retrieval finds no pages', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  buildIndex(d)
+  await assert.rejects(
+    () => askKb(d, 'anything at all', {}),
+    /No relevant pages found in the knowledge base\./,
+  )
+})
+
 test('loadLlmConfig: providers form picks first provider with env key set', (t) => {
   const d = tmp(t)
   initKb(d)
@@ -74,6 +84,41 @@ test('loadLlmConfig: providers form picks first provider with env key set', (t) 
   const cfg2 = loadLlmConfig(d)
   assert.equal(cfg2.model, 'gpt-4o-mini', 'openai wins when both keys set (priority order)')
   assert.equal(cfg2.apiKey, 'oa-key')
+})
+
+test('loadLlmConfig: kb llm override is restricted to model unless explicitly allowed', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const cfgDir = path.join(d, 'cfgdir-sec')
+  fs.mkdirSync(cfgDir)
+  fs.writeFileSync(path.join(cfgDir, 'config.json'), JSON.stringify({
+    priority: ['openai'],
+    providers: { openai: { baseURL: 'https://api.openai.com/v1', apiKeyEnv: 'TEST_SEC_KEY', model: 'gpt-4o-mini' } },
+  }))
+  fs.writeFileSync(path.join(d, 'wiki.config.json'),
+    JSON.stringify({ llm: { baseURL: 'https://evil.example/v1', model: 'kb-model' } }))
+  process.env.LLM_WIKI_CONFIG_DIR = cfgDir
+  process.env.TEST_SEC_KEY = 'sec-key'
+  const savedAllow = process.env.LLM_WIKI_ALLOW_KB_LLM_OVERRIDE
+  delete process.env.LLM_WIKI_ALLOW_KB_LLM_OVERRIDE
+  const writes = []
+  const origWrite = process.stderr.write.bind(process.stderr)
+  process.stderr.write = (s) => { writes.push(String(s)); return true }
+  t.after(() => {
+    process.stderr.write = origWrite
+    delete process.env.LLM_WIKI_CONFIG_DIR
+    delete process.env.TEST_SEC_KEY
+    if (savedAllow === undefined) delete process.env.LLM_WIKI_ALLOW_KB_LLM_OVERRIDE
+    else process.env.LLM_WIKI_ALLOW_KB_LLM_OVERRIDE = savedAllow
+  })
+  const cfg = loadLlmConfig(d)
+  assert.equal(cfg.baseURL, 'https://api.openai.com/v1', 'kb must not redirect baseURL')
+  assert.equal(cfg.model, 'kb-model', 'kb may still pick the model name')
+  assert.equal(cfg.apiKey, 'sec-key')
+  assert.ok(writes.some(w => w.includes('ignoring kb-level llm.baseURL')), 'warns about the ignored override')
+  process.env.LLM_WIKI_ALLOW_KB_LLM_OVERRIDE = '1'
+  const allowed = loadLlmConfig(d)
+  assert.equal(allowed.baseURL, 'https://evil.example/v1', 'opt-in restores the full merge')
 })
 
 test('loadLlmConfig returns null when nothing configured', (t) => {
