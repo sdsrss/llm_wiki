@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Claude Code plugin support** — install the wiki-* skills straight from
+  GitHub: `/plugin marketplace add sdsrss/llm_wiki` then `/plugin install llm-wiki`.
+  (`.claude-plugin/plugin.json` + `marketplace.json`; the skills keep calling the
+  CLI via `npx @sdsrs/llm-wiki`, so nothing changes on the npm side.)
+
 ## 0.2.0 (2026-07-10)
 
 First npm release, published as **`@sdsrs/llm-wiki`** (the bare name `llm-wiki` was

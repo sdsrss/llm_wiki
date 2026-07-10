@@ -59,13 +59,22 @@ The first provider whose `apiKeyEnv` env var is set wins. Export the matching ke
 
 ## Skills and connecting
 
+The skills (`wiki-build`, `wiki-ingest`, `wiki-query`, `wiki-lint`, `wiki-connect`,
+`wiki-distill`) let a coding agent build and maintain the KB. Two ways to get them:
+
+**As a Claude Code plugin** (recommended — updates with the repo):
+
+```
+/plugin marketplace add sdsrss/llm_wiki
+/plugin install llm-wiki
+```
+
+**Copied into a project** (works for Codex and other agents too):
+
 ```sh
 npx @sdsrs/llm-wiki install-skills                    # copy wiki-* skills into ./.claude
 npx @sdsrs/llm-wiki connect <projectDir> --kb <path>  # register a KB into a project's CLAUDE.md
 ```
-
-The skills (`wiki-build`, `wiki-ingest`, `wiki-query`, `wiki-lint`, `wiki-connect`,
-`wiki-distill`) let a coding agent build and maintain the KB.
 
 ## KB layout
 
