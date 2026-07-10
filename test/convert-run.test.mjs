@@ -32,6 +32,23 @@ test('runConvertPlan writes raw files and manifest; second scan shows unchanged'
   assert.equal(r2.batches.length, 0)
 })
 
+test('failed conversions do not enter the manifest and retry on the next scan', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  fs.writeFileSync(path.join(src, 'good.md'), '# Good\nbody')
+  fs.writeFileSync(path.join(src, 'broken.docx'), 'not a real zip container')
+  await scanSource(src, kb, {})
+  const r = await runConvertPlan(kb)
+  assert.deepEqual(r.converted.map(c => c.src), ['good.md'])
+  assert.equal(r.failed.length, 1)
+  assert.equal(r.failed[0].src, 'broken.docx')
+  const m = loadManifest(kb)
+  assert.ok(m.files['good.md'])
+  assert.equal(m.files['broken.docx'], undefined, 'failed file must not enter the manifest')
+  const r2 = await scanSource(src, kb, {})
+  assert.ok(r2.batches.flat().includes('broken.docx'), 'still planned on the next scan (not marked converted)')
+})
+
 test('same-basename originals from different dirs get collision suffixes and re-converts reuse them', async (t) => {
   const src = tmp(t), kb = tmp(t)
   initKb(kb)

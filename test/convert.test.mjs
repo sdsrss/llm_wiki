@@ -36,6 +36,25 @@ test('html: readability strips nav/ads, keeps article text', async (t) => {
   assert.ok(!/Buy now/.test(r.markdown), 'ad banner must be stripped')
 })
 
+test('txt branch: passes text through with title from first heading or basename', async (t) => {
+  const d = tmp(t)
+  fs.writeFileSync(path.join(d, 'note.txt'), '# 笔记标题\nplain body text')
+  const r1 = await convertFile(path.join(d, 'note.txt'))
+  assert.equal(r1.title, '笔记标题')
+  assert.match(r1.markdown, /plain body text/)
+  fs.writeFileSync(path.join(d, 'plain.txt'), 'no heading at all')
+  const r2 = await convertFile(path.join(d, 'plain.txt'))
+  assert.equal(r2.title, 'plain.txt', 'falls back to basename')
+})
+
+test('docx branch: extracts text via mammoth', async () => {
+  const fixture = path.resolve(path.dirname(new URL(import.meta.url).pathname), 'fixtures/hello.docx')
+  const r = await convertFile(fixture)
+  assert.equal(r.title, 'Hello docx')
+  assert.match(r.markdown, /Body paragraph from a real docx fixture/)
+  assert.equal(r.warnings.length, 0)
+})
+
 test('unsupported and broken files degrade gracefully', async (t) => {
   const d = tmp(t)
   fs.writeFileSync(path.join(d, 'x.xyz'), 'data')

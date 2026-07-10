@@ -55,6 +55,25 @@ test('buildIndex bounds the pending section and preserves user sections after it
   assert.ok(!pendingSection.includes('reading notes'), 'user section is not absorbed into pending')
 })
 
+test('buildIndex splits into topics/ files above indexSplitAt', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ indexSplitAt: 2 }))
+  fs.writeFileSync(path.join(d, 'wiki/sources/s1.md'), page('source', 'S1'))
+  fs.writeFileSync(path.join(d, 'wiki/sources/s2.md'), page('source', 'S2'))
+  fs.writeFileSync(path.join(d, 'wiki/entities/e1.md'), page('entity', 'E1'))
+  const r = buildIndex(d)
+  assert.equal(r.topicsSplit, true)
+  const idx = fs.readFileSync(path.join(d, 'wiki/index.md'), 'utf8')
+  assert.match(idx, /See \[\[topics\/source\]\] \(2 pages\)/)
+  assert.match(idx, /See \[\[topics\/entity\]\] \(1 pages\)/)
+  assert.ok(!/\[\[sources\/s1\]\]/.test(idx), 'page lines live in topics files, not index.md')
+  const topicSources = fs.readFileSync(path.join(d, 'wiki/topics/source.md'), 'utf8')
+  assert.match(topicSources, /\[\[sources\/s1\]\] — desc of S1/)
+  assert.match(topicSources, /\[\[sources\/s2\]\]/)
+  assert.match(idx, /## Pending concepts/, 'pending section survives the split layout')
+})
+
 test('buildIndex routes unknown types to an Other section, graph keeps raw type', (t) => {
   const d = tmp(t)
   initKb(d)

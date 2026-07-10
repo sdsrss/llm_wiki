@@ -38,6 +38,22 @@ test('lintKb finds mechanical issues and semantic candidates', async (t) => {
   assert.ok(fs.existsSync(path.join(d, '.lint-report.json')))
 })
 
+test('lintKb missing-field rule fires per absent required field', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'raw/r.md'), 'raw')
+  // valid yaml frontmatter, but description/tags/sources are absent
+  fs.writeFileSync(path.join(d, 'wiki/entities/sparse.md'),
+    `---\ntype: entity\ntitle: Sparse\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nbody [[entities/sparse]]`)
+  const r = await lintKb(d)
+  const missing = r.mechanical.filter(i => i.rule === 'missing-field' && i.path === 'entities/sparse.md')
+  const details = missing.map(i => i.detail)
+  assert.ok(details.some(x => x.includes('description')))
+  assert.ok(details.some(x => x.includes('tags')))
+  assert.ok(details.some(x => x.includes('sources')), 'sources evidence chain required')
+  assert.ok(!details.some(x => x.includes('title')), 'present fields not flagged')
+})
+
 test('lintKb flags broken raw body links but not valid ones', async (t) => {
   const d = tmp(t)
   initKb(d)

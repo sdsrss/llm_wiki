@@ -57,6 +57,29 @@ test('scanSource: symlinked dirs are reported as skipped, symlinked files still 
   assert.ok(!r.files.some(f => f.rel.includes('in-linked-dir')), 'linked dir contents not walked')
 })
 
+test('scanSource --exclude skips matching paths with reason "excluded"', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  fs.writeFileSync(path.join(src, 'keep.md'), '# Keep\nbody')
+  fs.mkdirSync(path.join(src, 'drafts'))
+  fs.writeFileSync(path.join(src, 'drafts/wip.md'), '# WIP\nbody')
+  fs.writeFileSync(path.join(src, 'notes-draft.md'), '# Draft\nbody')
+  const r = await scanSource(src, kb, { exclude: ['draft'] })
+  assert.deepEqual(r.files.map(f => f.rel), ['keep.md'])
+  const excluded = r.skipped.filter(s => s.reason === 'excluded').map(s => s.rel).sort()
+  assert.deepEqual(excluded, ['drafts/wip.md', 'notes-draft.md'], 'substring match applies to the full relative path')
+})
+
+test('scanSource: empty file gets lang en and zero tokens (no NaN path)', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  fs.writeFileSync(path.join(src, 'empty.md'), '')
+  const r = await scanSource(src, kb, {})
+  const e = r.files.find(f => f.rel === 'empty.md')
+  assert.equal(e.lang, 'en')
+  assert.equal(e.tokens, 0)
+})
+
 test('scanSource persist:false computes the report without writing the plan file', async (t) => {
   const src = tmp(t), kb = tmp(t)
   initKb(kb)
