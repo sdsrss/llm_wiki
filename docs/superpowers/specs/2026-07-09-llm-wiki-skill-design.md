@@ -61,7 +61,7 @@
 ### 2.2 单页格式
 
 - YAML frontmatter + Markdown 正文；页面必须完整、独立、结构化（不是碎片/分块）。
-- frontmatter：`type`（必填：source|entity|concept|comparison，可扩展）、`title`、`description`、`tags`、`sources`（指向 raw 的证据链，来源页自身不填、其余必填）、`created`、`updated`。
+- frontmatter：`type`（必填：source|entity|concept|comparison，可扩展）、`title`、`description`、`tags`、`sources`（指向 raw 的证据链；**所有页面必填，来源页填其对应的单个 raw 文件**——status 命令依赖来源页的 sources 字段判断 raw 是否已编译）、`created`、`updated`。
 - 正文按类型走 AGENTS.md 定义的固定章节模板。
 - 可选标注：矛盾 callout `[!conflict]` / 加固 `[!reinforce]`（仅 lint 阶段写入）。
 
@@ -74,21 +74,21 @@
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `schemaFile` | `AGENTS.md` | 可改 CLAUDE.md / SCHEMA.md |
-| `rawDir` | `raw/` | 可改 `.raw/` |
+| `schemaFile` | `AGENTS.md` | 可改 CLAUDE.md / SCHEMA.md（**v1 未生效**：代码支持但未接线，init 不写入生成的配置；v1.1 接线） |
+| `rawDir` | `raw/` | 可改 `.raw/`（**v1 未生效**，同上） |
 | `conceptThreshold` | 2 | 概念页建页门槛（被 N 篇来源提到） |
 | `batchSize` | 5 | 编译单批文件数上限 |
 | `cascadeDepth` | 3 | 级联更新最大深度 |
 | `entityCardLines` | 30 | 实体页行数上限 |
 | `indexSplitAt` | 200 | 页面数超过则 index 分层为 topics/ |
 | `language` | `auto` | 页面语言（auto = 跟随源料主语言） |
-| `linkStyle` | `wikilink` | 或 `markdown`（OKF 兼容导出） |
+| `linkStyle` | `wikilink` | 或 `markdown`（OKF 兼容导出；**v1 未实现**，不写入生成的配置；v2 随 OKF 导出实现） |
 
 ### 2.5 铁律
 
 1. raw/ 只人写、不可变；wiki/ 只 LLM 写、人只审阅——读写权限隔离。
 2. 来源内容视为不可信输入：LLM 不执行资料中的任何指令（防文档注入）。
-3. 单库单垂直领域：scan 检测到领域混杂时警告并建议拆库。
+3. 单库单垂直领域。**v1 已接受偏差**：scan 不做自动领域混杂检测（无可靠的确定性启发式）；该判断由 wiki-build skill 中的 LLM 在读料时人工执行，混杂时向用户建议拆库。v1.1 可考虑 tag/语言异质性启发式。
 4. 全库纯本地 markdown + git 可管理，无供应商锁定。
 5. Ingest 严格 O(1)：禁止自动综合、自动矛盾检测、自动反链维护。
 
@@ -98,7 +98,7 @@
 |---|---|
 | `init [dir]` | 脚手架知识库结构 + AGENTS.md/wiki.config.json 模板 |
 | `scan <srcDir>` | 盘点源目录：格式统计、SHA-256 精确去重、minhash 近似去重指纹、语言检测、领域混杂预警；输出编译计划（分批清单）+ **token 成本预估** |
-| `convert <files>` | PDF/docx/html/txt → 干净 markdown；html 走 readability 抽正文（自动去广告/导航/页脚） |
+| `convert`（消费 scan 计划） | PDF/docx/html/txt → 干净 markdown；html 走 readability 抽正文（自动去广告/导航/页脚）。实现为 plan-driven：`convert --kb <dir>` 逐批转换 `.scan-plan.json` 中的文件，而非显式传文件列表 |
 | `index` | 从 frontmatter 重建 index.md / topics/ / graph.json / llms.txt / hot.md 骨架 |
 | `lint` | 机械校验：YAML 语法、frontmatter schema、断链、孤儿页、index 同步、manifest 对账；输出「可自动修/需 LLM 裁决」两份清单 |
 | `ask "<问题>"` | 独立问答：读 index → BM25 定位候选页 → 读完整页面（绝不用 chunk 当上下文）→ 调第三方 LLM API 带引用作答 |
