@@ -39,6 +39,13 @@ CLI does not call an LLM to build pages, only to `ask`.
 `ask` supports `-k <n>` (pages to load) and `--retrieve-only` (locate pages by
 BM25 without calling the LLM). All commands take `--kb <dir>` (default `.`).
 
+Retrieval is lexical (BM25), so ask in the language the KB pages are written
+in — a Chinese question against an English-only KB finds nothing (use
+`--retrieve-only` or the `wiki-query` skill, which browses via `index.md`,
+to work around it). Pages are always sent whole; when the selected pages
+exceed `askTokenBudget` (`wiki.config.json`, default 32000), the
+lowest-ranked pages are dropped, never truncated.
+
 ## LLM config
 
 `ask` needs an OpenAI-compatible endpoint. Configure `~/.llm-wiki/config.json`:
@@ -75,6 +82,11 @@ The skills (`wiki-build`, `wiki-ingest`, `wiki-query`, `wiki-lint`, `wiki-connec
 npx @sdsrs/llm-wiki install-skills                    # copy wiki-* skills into ./.claude
 npx @sdsrs/llm-wiki connect <projectDir> --kb <path>  # register a KB into a project's CLAUDE.md
 ```
+
+> **Migration note (pre-0.2.0 checkouts):** `connect` blocks written before the
+> npm rename say `npx llm-wiki ...` — on npm that bare name is an **unrelated
+> third-party package**. Re-run `connect` once per project to refresh the
+> sentinel block (it is rewritten in place, idempotently).
 
 ## KB layout
 

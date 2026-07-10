@@ -7,6 +7,45 @@
   (`.claude-plugin/plugin.json` + `marketplace.json`; the skills keep calling the
   CLI via `npx @sdsrs/llm-wiki`, so nothing changes on the npm side.)
 
+### Fixed (audit batch, 2026-07-10)
+
+- **fix: re-converting a changed source now overwrites its raw file in place.**
+  Previously a fresh `-2` suffixed file was created, orphaning the old raw file
+  and silently defeating lint's `stale-scan` (pages cite the old raw path while
+  the manifest pointed at the new one, so staleness never fired).
+- **fix: `status --src` no longer overwrites `.scan-plan.json`** — the internal
+  scan runs read-only, so a saved plan (including its `--exclude` choices)
+  survives status checks.
+- **fix: `ask` error handling** — non-ok API responses now include the response
+  body (first 200 chars); unexpected 200-response shapes raise a clear error
+  instead of a bare `TypeError`.
+- **fix: `lint` promote-concepts now accepts hyphen/en-dash pending lines**
+  (previously only em-dash `—` lines were counted, so hand-written entries
+  never promoted).
+
+### Changed
+
+- **`ask` token budget** — selected pages are dropped (whole, lowest BM25 rank
+  first) when they exceed `askTokenBudget` (`wiki.config.json`, default 32000);
+  the CLI reports which pages were dropped. Pages are never truncated.
+- **Skills and `connect` blocks pin the CLI major version** (`npx
+  @sdsrs/llm-wiki@0 ...`) so a future 1.x npm release cannot silently change
+  what installed skills execute. **Re-run `connect` on projects wired before
+  the npm rename** — old blocks say `npx llm-wiki`, which is an unrelated
+  npm package.
+- **`scan` reports symlinks** — symlinked directories (not followed) and broken
+  symlinks now appear in the `skipped` list instead of vanishing silently.
+
+### Added
+
+- **CI** — GitHub Actions runs the test suite on Node 22/24 plus
+  `npm pack --dry-run` and a version-sync check across `package.json`,
+  `plugin.json`, and `marketplace.json` (`scripts/check-versions.mjs`).
+
+### Removed
+
+- `serializeFrontmatter` (dead export, no production callers).
+
 ## 0.2.0 (2026-07-10)
 
 First npm release, published as **`@sdsrs/llm-wiki`** (the bare name `llm-wiki` was
