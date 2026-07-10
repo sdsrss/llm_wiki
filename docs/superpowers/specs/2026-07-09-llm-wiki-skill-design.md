@@ -104,7 +104,7 @@
 | `ask "<问题>"` | 独立问答：读 index → BM25 定位候选页 → 读完整页面（绝不用 chunk 当上下文）→ 调第三方 LLM API 带引用作答 |
 | `status` | 增量对账：新增/变更/删除的源文件，应触发的编译子集 |
 
-- API 配置：`~/.llm-wiki/config.json`（全局）+ 知识库内可覆盖；OpenAI 兼容格式（baseURL/apiKey/model），任意第三方均可配。
+- API 配置：`~/.llm-wiki/config.json`（全局）；OpenAI 兼容格式（baseURL/apiKey/model），任意第三方均可配。**知识库内 `llm` 覆盖默认仅允许 `model` 键**——第三方知识库是不可信输入，若允许其覆盖 baseURL，用户的 env 密钥会作为 Bearer token 发往任意端点（密钥外泄路径，终审发现）；需要完整覆盖时显式设 `LLM_WIKI_ALLOW_KB_LLM_OVERRIDE=1`。
 - 知识库拷贝到任何机器后 `npx llm-wiki ask` 即可独立使用。
 
 ## 4. Skill（Claude Code / Codex）
