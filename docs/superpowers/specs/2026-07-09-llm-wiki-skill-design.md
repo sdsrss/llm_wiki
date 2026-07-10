@@ -99,10 +99,10 @@
 | `init [dir]` | 脚手架知识库结构 + AGENTS.md/wiki.config.json 模板 |
 | `scan <srcDir>` | 盘点源目录：格式统计、SHA-256 精确去重、minhash 近似去重指纹、语言检测、领域混杂预警；输出编译计划（分批清单）+ **token 成本预估** |
 | `convert`（消费 scan 计划） | PDF/docx/html/txt → 干净 markdown；html 走 readability 抽正文（自动去广告/导航/页脚）。实现为 plan-driven：`convert --kb <dir>` 逐批转换 `.scan-plan.json` 中的文件，而非显式传文件列表 |
-| `index` | 从 frontmatter 重建 index.md / topics/ / graph.json / llms.txt / hot.md 骨架 |
-| `lint` | 机械校验：YAML 语法、frontmatter schema、断链、孤儿页、index 同步、manifest 对账；输出「可自动修/需 LLM 裁决」两份清单 |
+| `index` | 从 frontmatter 重建 index.md / topics/ / graph.json / llms.txt。**v1 注记**：hot.md 归 LLM 维护，index 不重建其骨架（仅 init 播种） |
+| `lint` | 机械校验：YAML 语法、frontmatter schema、断链（含 raw 链接存在性）、孤儿页；输出「可自动修/需 LLM 裁决」两份清单。**v1 注记**：index 同步由 `--fix` 全量重建覆盖，manifest 对账由 `status` 承担，lint 不单独检查这两项 |
 | `ask "<问题>"` | 独立问答：读 index → BM25 定位候选页 → 读完整页面（绝不用 chunk 当上下文）→ 调第三方 LLM API 带引用作答 |
-| `status` | 增量对账：新增/变更/删除的源文件，应触发的编译子集 |
+| `status` | 增量对账：新增/变更/删除的源文件，应触发的编译子集。**v1 限制**：manifest 以单一源目录的相对路径为键，一个知识库对应一个源目录；换源目录扫描会把旧条目全部报为 removed |
 
 - API 配置：`~/.llm-wiki/config.json`（全局）；OpenAI 兼容格式（baseURL/apiKey/model），任意第三方均可配。**知识库内 `llm` 覆盖默认仅允许 `model` 键**——第三方知识库是不可信输入，若允许其覆盖 baseURL，用户的 env 密钥会作为 Bearer token 发往任意端点（密钥外泄路径，终审发现）；需要完整覆盖时显式设 `LLM_WIKI_ALLOW_KB_LLM_OVERRIDE=1`。
 - 知识库拷贝到任何机器后 `npx llm-wiki ask` 即可独立使用。
