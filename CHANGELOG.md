@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-07-10)
+
+No breaking changes; no KB migration needed. Two behavior changes you may
+notice: (1) `ask` with pages exceeding `askTokenBudget` (default 32000) now
+drops the lowest-ranked pages instead of sending an oversized request —
+raise the key in `wiki.config.json` to restore the old envelope; (2) `ask`
+with zero BM25 hits now makes an extra LLM call to pick pages from the KB
+listing instead of erroring. The CLI prints a note whenever either kicks
+in. To stay on the previous behavior entirely, pin
+`npx @sdsrs/llm-wiki@0.2.0`. If a project was connected before the 0.2.0
+npm rename, re-run `connect` once — old blocks invoke `npx llm-wiki`,
+which is an unrelated npm package.
 
 - **Claude Code plugin support** — install the wiki-* skills straight from
   GitHub: `/plugin marketplace add sdsrss/llm_wiki` then `/plugin install llm-wiki`.
