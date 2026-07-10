@@ -1,5 +1,5 @@
 {
-  "name": "llm-wiki-cli",
+  "name": "@sdsrs/llm-wiki",
   "version": "0.2.0",
   "description": "Compile messy document directories into Karpathy-style llm_wiki knowledge bases — standalone Q&A CLI + Claude Code/Codex skills",
   "directories": {

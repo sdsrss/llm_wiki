@@ -6,7 +6,7 @@ const END = '<!-- llm-wiki:end -->'
 
 function renderBlock(kbs) {
   const lines = kbs.map(k =>
-    `- role=${k.role} path=${k.path} — read ${k.path}/wiki/index.md first; ask via \`npx llm-wiki-cli ask --kb ${k.path} "..."\``)
+    `- role=${k.role} path=${k.path} — read ${k.path}/wiki/index.md first; ask via \`npx @sdsrs/llm-wiki ask --kb ${k.path} "..."\``)
   return `${BEGIN}\n## Knowledge bases (managed by llm-wiki, do not edit)\n${lines.join('\n')}\n${END}`
 }
 

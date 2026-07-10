@@ -2,10 +2,10 @@
 
 ## 0.2.0 (2026-07-10)
 
-First npm release, published as **`llm-wiki-cli`** (the bare name `llm-wiki` was
+First npm release, published as **`@sdsrs/llm-wiki`** (the bare name `llm-wiki` was
 already taken on the registry by an unrelated project). The installed binary is
 still `llm-wiki`. If you used the CLI from a git checkout before, only the
-`npx` invocation changes: `npx llm-wiki ...` → `npx llm-wiki-cli ...`.
+`npx` invocation changes: `npx llm-wiki ...` → `npx @sdsrs/llm-wiki ...`.
 
 ### Added (v1.2 research-adoption batch)
 
