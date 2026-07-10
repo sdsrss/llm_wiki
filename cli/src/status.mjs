@@ -4,6 +4,21 @@ import { kbPaths } from './paths.mjs'
 import { listWikiPages } from './pages.mjs'
 import { scanSource } from './scanner.mjs'
 
+// Recursively collect *.md files under a raw/ tree so hand-organized subdirectories
+// are visible. Skips the `_originals` staging dir and any dotfiles/dotdirs.
+function collectRawMd(dir, kbRoot, out) {
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (ent.name.startsWith('.')) continue
+    const full = path.join(dir, ent.name)
+    if (ent.isDirectory()) {
+      if (ent.name === '_originals') continue
+      collectRawMd(full, kbRoot, out)
+    } else if (ent.name.endsWith('.md')) {
+      out.push(path.relative(kbRoot, full))
+    }
+  }
+}
+
 export async function statusKb(kbRoot, srcDir) {
   const p = kbPaths(kbRoot)
   const referenced = new Set()
@@ -12,9 +27,9 @@ export async function statusKb(kbRoot, srcDir) {
   }
   const uncompiledRaw = []
   if (fs.existsSync(p.raw)) {
-    for (const f of fs.readdirSync(p.raw)) {
-      if (!f.endsWith('.md')) continue
-      const rel = path.relative(kbRoot, path.join(p.raw, f))
+    const rawFiles = []
+    collectRawMd(p.raw, kbRoot, rawFiles)
+    for (const rel of rawFiles) {
       if (!referenced.has(rel)) uncompiledRaw.push(rel)
     }
   }

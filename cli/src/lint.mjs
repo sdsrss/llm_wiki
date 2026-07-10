@@ -33,7 +33,7 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
   for (const pg of pages) {
     if (pg.error) continue
     const id = pg.relPath.replace(/\.md$/, '')
-    if (pg.data.type !== 'source' && !incoming.has(id)) mechanical.push({ rule: 'orphan-page', path: pg.relPath, detail: 'no incoming wikilinks' })
+    if (pg.data.type !== 'source' && pg.data.type !== 'comparison' && !incoming.has(id)) mechanical.push({ rule: 'orphan-page', path: pg.relPath, detail: 'no incoming wikilinks' })
   }
 
   if (fs.existsSync(p.indexMd)) {
@@ -54,7 +54,9 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
     }
   }
   for (const [tag, list] of byTag) {
-    if (list.length >= 2) semantic.push({ task: 'contradiction-scan', detail: `tag "${tag}": ${list.join(', ')}` })
+    // Only flag small shared-tag clusters: 2-5 pages are plausible contradiction candidates.
+    // Larger groups are navigation/topic tags (one tag on dozens of pages) — unactionable noise.
+    if (list.length >= 2 && list.length <= 5) semantic.push({ task: 'contradiction-scan', detail: `tag "${tag}": ${list.join(', ')}` })
   }
 
   if (fix) { buildIndex(kbRoot); autoFixed.push('index-rebuilt') }

@@ -38,3 +38,18 @@ test('buildIndex writes index.md preserving pending, graph.json, llms.txt', (t) 
   assert.ok(graph.edges.some(e => e.source === 'entities/kar' && e.target === 'raw/a.md' && e.type === 'source'))
   assert.match(fs.readFileSync(path.join(d, 'llms.txt'), 'utf8'), /wiki\/sources\/art\.md/)
 })
+
+test('buildIndex routes unknown types to an Other section, graph keeps raw type', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/sources/art.md'), page('source', 'Article'))
+  fs.writeFileSync(path.join(d, 'wiki/entities/ds.md'), page('dataset', 'MyDataset'))
+  buildIndex(d)
+  const idx = fs.readFileSync(path.join(d, 'wiki/index.md'), 'utf8')
+  const otherSection = idx.split('## Other')[1] ?? ''
+  assert.match(otherSection, /\[\[entities\/ds\]\]/)
+  const sourcesSection = idx.split('## Sources')[1]?.split('##')[0] ?? ''
+  assert.ok(!/entities\/ds/.test(sourcesSection), 'dataset page not bucketed under Sources')
+  const graph = JSON.parse(fs.readFileSync(path.join(d, 'wiki/graph.json'), 'utf8'))
+  assert.equal(graph.nodes.find(n => n.id === 'entities/ds').type, 'dataset')
+})

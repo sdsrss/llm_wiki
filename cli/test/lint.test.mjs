@@ -54,3 +54,42 @@ test('statusKb reports uncompiled raw files', async (t) => {
   const s = await statusKb(d)
   assert.deepEqual(s.uncompiledRaw, ['raw/lonely.md'])
 })
+
+test('statusKb finds uncompiled raw files in subdirectories', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.mkdirSync(path.join(d, 'raw/sub'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'raw/sub/x.md'), 'nested, never compiled')
+  const s = await statusKb(d)
+  assert.ok(s.uncompiledRaw.includes('raw/sub/x.md'))
+})
+
+test('contradiction-scan caps at small shared-tag groups', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'raw/a.md'), 'raw')
+  // two pages share tag "pair" -> group emitted; six pages share tag "mega" -> no group
+  const mk = (name, tags) => fs.writeFileSync(path.join(d, `wiki/entities/${name}.md`),
+    `---\ntype: entity\ntitle: ${name}\ndescription: d\ntags: [${tags}]\nsources: [raw/a.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nbody [[entities/${name}]]`)
+  mk('p1', 'pair, mega')
+  mk('p2', 'pair, mega')
+  for (const n of ['m3', 'm4', 'm5', 'm6']) mk(n, 'mega')
+  const r = await lintKb(d)
+  const cs = r.semantic.filter(s => s.task === 'contradiction-scan')
+  assert.ok(cs.some(s => s.detail.includes('tag "pair"')), 'exactly-2-page tag still grouped')
+  assert.ok(!cs.some(s => s.detail.includes('tag "mega"')), '6-page tag suppressed as navigation tag')
+})
+
+test('orphan rule exempts comparison pages but not entities', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'raw/a.md'), 'raw')
+  fs.writeFileSync(path.join(d, 'wiki/comparisons/cmp.md'),
+    `---\ntype: comparison\ntitle: Cmp\ndescription: d\ntags: [t]\nsources: [raw/a.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nno incoming links`)
+  fs.writeFileSync(path.join(d, 'wiki/entities/lone.md'),
+    `---\ntype: entity\ntitle: Lone\ndescription: d\ntags: [t]\nsources: [raw/a.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nno incoming links`)
+  const r = await lintKb(d)
+  const orphans = r.mechanical.filter(i => i.rule === 'orphan-page').map(i => i.path)
+  assert.ok(!orphans.some(p => p.includes('comparisons/cmp')), 'comparison not flagged as orphan')
+  assert.ok(orphans.some(p => p.includes('entities/lone')), 'entity still flagged as orphan')
+})

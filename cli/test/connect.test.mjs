@@ -39,6 +39,18 @@ test('connect creates CLAUDE.md when absent', (t) => {
   assert.match(fs.readFileSync(path.join(proj, 'CLAUDE.md'), 'utf8'), /llm-wiki:begin/)
 })
 
+test('connect normalizes equivalent kb paths to a single registry entry', (t) => {
+  const proj = tmp(t)
+  connectProject(proj, { kb: './kb', role: 'project' })
+  connectProject(proj, { kb: 'kb', role: 'reference' })
+  const reg = JSON.parse(fs.readFileSync(path.join(proj, '.llm-wiki.json'), 'utf8'))
+  assert.equal(reg.kbs.length, 1, 'equivalent paths collapse to one entry')
+  assert.equal(reg.kbs[0].role, 'reference', 'role updated to the newer value')
+  connectProject(proj, { kb: path.join(proj, 'kb'), remove: true })
+  const reg2 = JSON.parse(fs.readFileSync(path.join(proj, '.llm-wiki.json'), 'utf8'))
+  assert.equal(reg2.kbs.length, 0, 'removed via absolute path form')
+})
+
 test('no-op remove on fresh project does not create CLAUDE.md', (t) => {
   const proj = tmp(t)
   connectProject(proj, { kb: './kb', remove: true })

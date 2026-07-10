@@ -13,7 +13,10 @@ function renderBlock(kbs) {
 export function connectProject(projectDir, { kb, role = 'project', remove = false }) {
   const regFile = path.join(projectDir, '.llm-wiki.json')
   const registry = fs.existsSync(regFile) ? JSON.parse(fs.readFileSync(regFile, 'utf8')) : { kbs: [] }
-  registry.kbs = registry.kbs.filter(k => k.path !== kb)
+  // Match by resolved absolute path so `./kb`, `kb`, and the absolute form are one entry;
+  // store the user-provided form verbatim (that is what gets rendered into CLAUDE.md).
+  const same = (a, b) => path.resolve(projectDir, a) === path.resolve(projectDir, b)
+  registry.kbs = registry.kbs.filter(k => !same(k.path, kb))
   if (!remove) registry.kbs.push({ path: kb, role })
   fs.writeFileSync(regFile, JSON.stringify(registry, null, 2) + '\n')
 
