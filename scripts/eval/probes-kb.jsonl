@@ -7,7 +7,7 @@
 {"q":"这套知识管理方法论是谁最早提出来的？","expect":["entities/karpathy"],"lang":"zh"}
 {"q":"一个概念要引用到几次才该从待定区提升成独立页面？","expect":["concepts/概念页创建门槛"],"lang":"zh"}
 {"q":"哪些开源项目把 Karpathy 的知识库片段工程化落地成了完整工具？","expect":["entities/claude-obsidian","entities/obsidian-wiki"],"lang":"zh"}
-{"q":"与其每次翻找碎片，不如把材料当代码那样一次性构建好、之后持续保鲜，这说的是什么理念？","expect":["concepts/编译优于检索","concepts/llm-wiki"],"lang":"zh-x"}
+{"q":"与其每次翻找碎片，不如把材料当代码那样一次性构建好、之后持续保鲜，这说的是什么理念？","expect":["concepts/编译优于检索","concepts/llm-wiki"],"lang":"zh"}
 {"q":"What is GBrain and how does it extend the knowledge-base idea?","expect":["entities/gbrain"],"lang":"en"}
 {"q":"What is OKF, the open knowledge format from Google Cloud?","expect":["entities/okf"],"lang":"en"}
 {"q":"What is the claude-obsidian project?","expect":["entities/claude-obsidian"],"lang":"en"}
