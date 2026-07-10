@@ -107,3 +107,42 @@ test('wiki_read_page blocks invalidated pages unless include_invalidated', async
   assert.equal(forced.isError ?? false, false)
   assert.match(forced.content[0].text, /已失效的旧概念内容/)
 })
+
+test('wiki_ask answers via the configured LLM and cites pages used', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: '答案 [[sources/karpathy-gist]]' } }] }) })
+  const client = await connectClient(t, d, { fetchImpl })
+  const r = await client.callTool({ name: 'wiki_ask', arguments: { question: '三层架构有哪些' } })
+  assert.equal(r.isError ?? false, false)
+  const text = r.content[0].text
+  assert.match(text, /答案/)
+  assert.match(text, /pages used: sources\/karpathy-gist\.md/)
+})
+
+test('wiki_ask without LLM config errors and points at search+read', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'empty-cfg')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  // An empty config dir still falls through to the builtin providers keyed on
+  // OPENAI_API_KEY / OPENROUTER_API_KEY; clear them so "no config" is genuine
+  // (same hermetic pattern as test/ask.test.mjs "returns null when nothing configured").
+  const savedKeys = { oa: process.env.OPENAI_API_KEY, or: process.env.OPENROUTER_API_KEY }
+  delete process.env.OPENAI_API_KEY
+  delete process.env.OPENROUTER_API_KEY
+  t.after(() => {
+    delete process.env.LLM_WIKI_CONFIG_DIR
+    if (savedKeys.oa) process.env.OPENAI_API_KEY = savedKeys.oa
+    if (savedKeys.or) process.env.OPENROUTER_API_KEY = savedKeys.or
+  })
+  const client = await connectClient(t, d)
+  const r = await client.callTool({ name: 'wiki_ask', arguments: { question: '三层架构有哪些' } })
+  assert.equal(r.isError, true)
+  assert.match(r.content[0].text, /wiki_search/, 'degradation guidance present')
+})
