@@ -239,6 +239,21 @@ test('loadLlmConfig: kb llm override is restricted to model unless explicitly al
   assert.equal(allowed.baseURL, 'https://evil.example/v1', 'opt-in restores the full merge')
 })
 
+test('loadLlmConfig on corrupt config.json names the file and never echoes its contents', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const cfgDir = path.join(d, 'cfgdir-corrupt')
+  fs.mkdirSync(cfgDir)
+  fs.writeFileSync(path.join(cfgDir, 'config.json'), '{"apiKey": "sk-SECRET-FRAGMENT-123"')
+  process.env.LLM_WIKI_CONFIG_DIR = cfgDir
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  let err
+  try { loadLlmConfig(d) } catch (e) { err = e }
+  assert.ok(err, 'corrupt config must throw')
+  assert.match(err.message, /config\.json: invalid JSON/)
+  assert.ok(!err.message.includes('SECRET-FRAGMENT'), 'no key fragment in the error message')
+})
+
 test('loadLlmConfig returns null when nothing configured', (t) => {
   const d = tmp(t)
   initKb(d)

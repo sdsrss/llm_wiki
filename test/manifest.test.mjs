@@ -32,3 +32,10 @@ test('manifest load/save/diff', (t) => {
   const diff2 = diffManifest(loadManifest(d), [{ rel: 'a.md', hash: 'h1' }])
   assert.deepEqual(diff2.removed, ['b.md'])
 })
+
+test('loadManifest names the file on corrupt JSON instead of a bare SyntaxError', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, '.manifest.json'), '{ "files": { broken')
+  assert.throws(() => loadManifest(d), /\.manifest\.json: invalid JSON/)
+})

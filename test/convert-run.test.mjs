@@ -58,6 +58,27 @@ test('same-basename originals from different dirs get collision suffixes and re-
   assert.match(fs.readFileSync(path.join(kb, m2.files['a/doc.txt'].original), 'utf8'), /revised content/)
 })
 
+test('runConvertPlan reports actionable errors for missing, corrupt, or stale plans', async (t) => {
+  const kb = tmp(t)
+  initKb(kb)
+  await assert.rejects(() => runConvertPlan(kb), /scan-plan\.json.*not found.*llm-wiki scan/s, 'missing plan')
+  fs.writeFileSync(path.join(kb, '.scan-plan.json'), '{ "files": [ broken')
+  await assert.rejects(() => runConvertPlan(kb), /scan-plan\.json: invalid JSON/, 'corrupt plan names the file')
+  fs.writeFileSync(path.join(kb, '.scan-plan.json'), JSON.stringify({ files: [] }))
+  await assert.rejects(() => runConvertPlan(kb), /unexpected shape.*re-run/s, 'shape guard')
+  // stale plan: a batch entry with no matching files record fails that entry, not the run
+  const src = tmp(t)
+  fs.writeFileSync(path.join(src, 'real.md'), '# Real\nbody')
+  await scanSource(src, kb, {})
+  const plan = JSON.parse(fs.readFileSync(path.join(kb, '.scan-plan.json'), 'utf8'))
+  plan.batches[0].push('hand-edited-ghost.md')
+  fs.writeFileSync(path.join(kb, '.scan-plan.json'), JSON.stringify(plan))
+  const r = await runConvertPlan(kb)
+  assert.equal(r.converted.length, 1)
+  assert.equal(r.failed.length, 1)
+  assert.match(r.failed[0].warnings[0], /not in the scan plan file list/)
+})
+
 test('re-converting a changed source overwrites its raw file in place (no orphans)', async (t) => {
   const src = tmp(t), kb = tmp(t)
   initKb(kb)
