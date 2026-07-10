@@ -73,7 +73,7 @@ export function readmeTemplate(name) {
 
 An llm_wiki knowledge base. Layers: \`raw/\` (immutable sources), \`wiki/\` (LLM-maintained pages).
 
-- Ask questions standalone: \`npx llm-wiki ask "your question"\` (configure the LLM API in \`~/.llm-wiki/config.json\`).
+- Ask questions standalone: \`npx llm-wiki-cli ask "your question"\` (configure the LLM API in \`~/.llm-wiki/config.json\`).
 - Browse: open \`wiki/index.md\`, or open this folder as an Obsidian vault.
 - Maintain with a coding agent: see \`AGENTS.md\`.
 `

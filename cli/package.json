@@ -1,6 +1,6 @@
 {
-  "name": "llm-wiki",
-  "version": "0.1.0",
+  "name": "llm-wiki-cli",
+  "version": "0.2.0",
   "description": "Compile messy document directories into Karpathy-style llm_wiki knowledge bases — standalone Q&A CLI + Claude Code/Codex skills",
   "directories": {
     "test": "test"
@@ -16,7 +16,7 @@
     "type": "git",
     "url": "git+https://github.com/sdsrss/llm_wiki.git"
   },
-  "files": ["bin", "src", "skills", "README.md"],
+  "files": ["bin", "src", "skills", "README.md", "CHANGELOG.md"],
   "bin": {
     "llm-wiki": "./bin/llm-wiki.mjs"
   },
