@@ -8,7 +8,15 @@
   "scripts": {
     "test": "node --test test/*.test.mjs"
   },
-  "keywords": ["llm-wiki", "knowledge-base", "karpathy", "claude-code", "agents", "rag-alternative", "markdown"],
+  "keywords": [
+    "llm-wiki",
+    "knowledge-base",
+    "karpathy",
+    "claude-code",
+    "agents",
+    "rag-alternative",
+    "markdown"
+  ],
   "author": "sds.rs",
   "license": "MIT",
   "type": "module",
@@ -16,7 +24,13 @@
     "type": "git",
     "url": "git+https://github.com/sdsrss/llm_wiki.git"
   },
-  "files": ["bin", "src", "skills", "README.md", "CHANGELOG.md"],
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "bin": {
     "llm-wiki": "./bin/llm-wiki.mjs"
   },
@@ -24,6 +38,7 @@
     "node": ">=22.19.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@mozilla/readability": "^0.6.0",
     "commander": "^15.0.0",
     "jsdom": "^29.1.1",
@@ -31,6 +46,7 @@
     "pdf-parse": "^2.4.5",
     "turndown": "^7.2.4",
     "undici": "^8.7.0",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
   }
 }
