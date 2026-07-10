@@ -1,0 +1,20 @@
+{"q":"为什么说维护知识库真正累人的其实是记账这件事？","expect":["concepts/bookkeeping"],"lang":"zh"}
+{"q":"增量编译是怎么靠哈希缓存跳过没变过的文件的？","expect":["concepts/增量编译"],"lang":"zh"}
+{"q":"每次查询临时检索文档片段的做法有哪些结构性缺陷？","expect":["concepts/rag"],"lang":"zh"}
+{"q":"配置层、只读原始层和维护层之间的读写权限是怎么隔离的？","expect":["concepts/三层架构"],"lang":"zh"}
+{"q":"LLM 怎么像看目录一样从总索引逐层下钻、按需加载知识？","expect":["concepts/渐进式披露"],"lang":"zh"}
+{"q":"规模化之后先用向量或关键词定位页面再读整页，这套检索方案是什么？","expect":["concepts/混合检索"],"lang":"zh"}
+{"q":"这套知识管理方法论是谁最早提出来的？","expect":["entities/karpathy"],"lang":"zh"}
+{"q":"一个概念要引用到几次才该从待定区提升成独立页面？","expect":["concepts/概念页创建门槛"],"lang":"zh"}
+{"q":"哪些开源项目把 Karpathy 的知识库片段工程化落地成了完整工具？","expect":["entities/claude-obsidian","entities/obsidian-wiki"],"lang":"zh"}
+{"q":"与其每次翻找碎片，不如把材料当代码那样一次性构建好、之后持续保鲜，这说的是什么理念？","expect":["concepts/编译优于检索","concepts/llm-wiki"],"lang":"zh-x"}
+{"q":"What is GBrain and how does it extend the knowledge-base idea?","expect":["entities/gbrain"],"lang":"en"}
+{"q":"What is OKF, the open knowledge format from Google Cloud?","expect":["entities/okf"],"lang":"en"}
+{"q":"What is the claude-obsidian project?","expect":["entities/claude-obsidian"],"lang":"en"}
+{"q":"What is OpenKnowledgeAI and who built it?","expect":["entities/openknowledgeai"],"lang":"en"}
+{"q":"Why is it better to compile knowledge once and keep it fresh than to re-interpret it on every query?","expect":["concepts/编译优于检索"],"lang":"en-x"}
+{"q":"What is the daily loop of taking in new material, answering questions, and running health checks?","expect":["concepts/ingest-query-lint"],"lang":"en-x"}
+{"q":"How does such a knowledge base turn into a durable, compounding asset that grows richer over time?","expect":["concepts/复利知识"],"lang":"en-x"}
+{"q":"Which eighty-year-old vision of a personally curated, cross-linked knowledge store foreshadowed all this?","expect":["concepts/memex"],"lang":"en-x"}
+{"q":"Why is the tedious part of keeping a knowledge base the record-keeping, and why do language models handle that tirelessly?","expect":["concepts/bookkeeping"],"lang":"en-x"}
+{"q":"How are keyword search and vector similarity blended to pin down the right pages before loading them whole?","expect":["concepts/混合检索"],"lang":"en-x"}

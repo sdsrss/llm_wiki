@@ -10,3 +10,4 @@ kb/
 .llm-wiki.json
 .lint-report.json
 .scan-plan.json
+scripts/eval/results/

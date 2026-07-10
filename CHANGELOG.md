@@ -6,6 +6,10 @@
   `wiki_overview` / `wiki_search` / `wiki_read_page` / `wiki_ask` (all read-only,
   whole pages only, untrusted-data notice on every result). Opens llm-wiki to
   MCP-only agents (Cursor, Windsurf). New deps: `@modelcontextprotocol/sdk`, `zod`.
+- **Vector page location (v2.1, opt-in)**: `llm-wiki embed` builds incremental
+  whole-page embeddings (`wiki/.vectors.json`); with `vectorEnabled: true`,
+  `ask` fuses BM25 + cosine via RRF (fail-open to BM25). `--retrieve-only` now
+  labels hit sources. Plus a retrieval eval harness (`scripts/eval/`).
 
 ## 0.3.0 (2026-07-10)
 

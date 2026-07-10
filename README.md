@@ -35,6 +35,7 @@ CLI does not call an LLM to build pages, only to `ask`.
 | `lint` | mechanical checks + a semantic worklist for the agent |
 | `status` | incremental state: uncompiled raw files, source-dir diff, affected wiki pages |
 | `export` | export the wiki graph as GraphML, Cypher, or a self-contained interactive HTML viewer |
+| `embed` | compute/update page embeddings (wiki/.vectors.json) for optional vector page location |
 | `mcp` | run a read-only MCP server (stdio) over the KB — for Cursor/Windsurf and other MCP-only agents |
 
 `ask` supports `-k <n>` (pages to load) and `--retrieve-only` (locate pages by
@@ -48,6 +49,14 @@ non-invalidated pages are accepted. `--retrieve-only` stays pure BM25.
 Pages are always sent whole; when the selected pages exceed
 `askTokenBudget` (`wiki.config.json`, default 32000), the lowest-ranked
 pages are dropped, never truncated.
+
+**Optional vector page location** (v2.1): set `"vectorEnabled": true` in
+`wiki.config.json`, add `"embeddingModel"` to your provider in
+`~/.llm-wiki/config.json`, and run `npx @sdsrs/llm-wiki@0 embed`. `ask` then
+fuses BM25 with whole-page cosine similarity (RRF) — fixing cross-language and
+rephrased queries — and `--retrieve-only` labels each hit `[bm25]`, `[vector]`
+or `[bm25+vector]`. Vectors only locate pages; context is still whole pages,
+never chunks. Any vector-path failure falls back to BM25 with a warning.
 
 ## LLM config
 
