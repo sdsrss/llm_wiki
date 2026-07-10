@@ -71,8 +71,18 @@ test('connect normalizes equivalent kb paths to a single registry entry', (t) =>
   assert.equal(reg2.kbs.length, 0, 'removed via absolute path form')
 })
 
-test('no-op remove on fresh project does not create CLAUDE.md', (t) => {
+test('no-op remove on fresh project creates neither CLAUDE.md nor .llm-wiki.json', (t) => {
   const proj = tmp(t)
   connectProject(proj, { kb: './kb', remove: true })
   assert.ok(!fs.existsSync(path.join(proj, 'CLAUDE.md')), 'CLAUDE.md must stay absent')
+  assert.ok(!fs.existsSync(path.join(proj, '.llm-wiki.json')), 'empty registry file must not be created')
+})
+
+test('remove of the last kb keeps an existing registry file (emptied, not deleted)', (t) => {
+  const proj = tmp(t)
+  connectProject(proj, { kb: './kb', role: 'project' })
+  connectProject(proj, { kb: './kb', remove: true })
+  assert.ok(fs.existsSync(path.join(proj, '.llm-wiki.json')), 'existing file is kept')
+  const reg = JSON.parse(fs.readFileSync(path.join(proj, '.llm-wiki.json'), 'utf8'))
+  assert.deepEqual(reg.kbs, [])
 })

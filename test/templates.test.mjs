@@ -7,8 +7,6 @@ import { DEFAULT_CONFIG, agentsMdTemplate, loadKbConfig } from '../src/templates
 import { kbPaths } from '../src/paths.mjs'
 
 test('DEFAULT_CONFIG has all spec keys with defaults', () => {
-  assert.equal(DEFAULT_CONFIG.schemaFile, 'AGENTS.md')
-  assert.equal(DEFAULT_CONFIG.rawDir, 'raw')
   assert.equal(DEFAULT_CONFIG.conceptThreshold, 2)
   assert.equal(DEFAULT_CONFIG.batchSize, 5)
   assert.equal(DEFAULT_CONFIG.cascadeDepth, 3)
@@ -16,6 +14,8 @@ test('DEFAULT_CONFIG has all spec keys with defaults', () => {
   assert.equal(DEFAULT_CONFIG.indexSplitAt, 200)
   assert.equal(DEFAULT_CONFIG.language, 'auto')
   assert.equal(DEFAULT_CONFIG.linkStyle, 'wikilink')
+  assert.ok(!('rawDir' in DEFAULT_CONFIG) && !('schemaFile' in DEFAULT_CONFIG),
+    'unwired pseudo-config keys removed — raw/ and AGENTS.md are fixed layout')
 })
 
 test('loadKbConfig merges defaults and names the file on corrupt JSON', (t) => {
@@ -30,15 +30,12 @@ test('loadKbConfig merges defaults and names the file on corrupt JSON', (t) => {
   assert.throws(() => loadKbConfig(d), /wiki\.config\.json: invalid JSON/)
 })
 
-test('kbPaths derives every path from root and respects config', () => {
+test('kbPaths derives every path from a fixed layout', () => {
   const p = kbPaths('/kb')
   assert.equal(p.raw, '/kb/raw')
   assert.equal(p.indexMd, '/kb/wiki/index.md')
   assert.equal(p.graphJson, '/kb/wiki/graph.json')
   assert.equal(p.schemaFile, '/kb/AGENTS.md')
-  const q = kbPaths('/kb', { rawDir: '.raw', schemaFile: 'SCHEMA.md' })
-  assert.equal(q.raw, '/kb/.raw')
-  assert.equal(q.schemaFile, '/kb/SCHEMA.md')
 })
 
 test('agentsMdTemplate embeds config thresholds and iron rules', () => {
