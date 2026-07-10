@@ -1,12 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
-import { listWikiPages } from './pages.mjs'
+import { listWikiPages, isInvalidated } from './pages.mjs'
 import { buildBm25Index, searchBm25 } from './bm25.mjs'
 import { loadLlmConfig, makeTransport } from './llm-config.mjs'
 
 export function retrievePages(kbRoot, question, k = 6) {
-  const pages = listWikiPages(kbRoot).filter(p => !p.error)
+  const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
   const idx = buildBm25Index(pages.map(p => ({
     id: p.relPath,
     text: [p.data.title, p.data.description, (p.data.tags ?? []).join(' '), p.body].join('\n'),

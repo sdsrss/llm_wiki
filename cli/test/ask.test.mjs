@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { initKb } from '../src/init.mjs'
 import { buildIndex } from '../src/indexer.mjs'
-import { askKb } from '../src/ask.mjs'
+import { askKb, retrievePages } from '../src/ask.mjs'
 import { loadLlmConfig, makeTransport } from '../src/llm-config.mjs'
 
 function tmp(t) {
@@ -134,6 +134,18 @@ test('loadLlmConfig returns null when nothing configured', (t) => {
     if (saved.or) process.env.OPENROUTER_API_KEY = saved.or
   })
   assert.equal(loadLlmConfig(d), null)
+})
+
+test('retrievePages excludes invalidated pages', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/entities/alpha.md'),
+    `---\ntype: entity\ntitle: Alpha protocol\ndescription: current alpha protocol page\ntags: [alpha]\nsources: []\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nalpha protocol details`)
+  fs.writeFileSync(path.join(d, 'wiki/entities/alpha-old.md'),
+    `---\ntype: entity\ntitle: Alpha protocol legacy\ndescription: obsolete alpha protocol page\ntags: [alpha]\nsources: []\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: invalidated\ninvalidated: 2026-07-09\nsuperseded_by: entities/alpha\n---\n\nalpha protocol details legacy`)
+  const hits = retrievePages(d, 'alpha protocol', 6)
+  assert.ok(hits.some(h => h.relPath === 'entities/alpha.md'))
+  assert.ok(!hits.some(h => h.relPath === 'entities/alpha-old.md'))
 })
 
 test('makeTransport: global fetch without proxy, undici fetch + dispatcher with proxy', async (t) => {
