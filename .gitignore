@@ -1,6 +1,12 @@
+node_modules/
+
+# local working state (agent/session files, not part of the published project)
+.claude/
 .code-graph/
 .superpowers/
-node_modules/
+CLAUDE.md
+docs/
+kb/
 .llm-wiki.json
 .lint-report.json
 .scan-plan.json
