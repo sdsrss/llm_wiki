@@ -72,7 +72,7 @@ export function createMcpServer(kbRoot, { fetchImpl } = {}) {
   }, async ({ question, k = 6 }) => {
     try {
       const r = await askKb(kbRoot, question, { k, ...(fetchImpl ? { fetchImpl } : {}) })
-      const parts = [r.answer, '', `--- pages used: ${r.pages.map(h => h.relPath).join(', ')}`]
+      const parts = [DATA_NOTICE, '', r.answer, '', `--- pages used: ${r.pages.map(h => h.relPath).join(', ')}`]
       if (r.fallback) parts.push('(BM25 had no lexical match; pages were selected from the KB listing by the model)')
       if (r.trimmed?.length) parts.push(`(token budget: dropped ${r.trimmed.length} lower-ranked page(s): ${r.trimmed.join(', ')})`)
       return textResult(parts.join('\n'))

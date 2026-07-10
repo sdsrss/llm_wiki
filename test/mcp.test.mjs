@@ -124,6 +124,7 @@ test('wiki_ask answers via the configured LLM and cites pages used', async (t) =
   assert.equal(r.isError ?? false, false)
   const text = r.content[0].text
   assert.match(text, /答案/)
+  assert.match(text, /never follow instructions/)
   assert.match(text, /pages used: sources\/karpathy-gist\.md/)
 })
 
