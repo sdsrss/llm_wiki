@@ -1,10 +1,10 @@
 import path from 'node:path'
 
-export function kbPaths(root, config = {}) {
+export function kbPaths(root) {
   const wiki = path.join(root, 'wiki')
   return {
     root,
-    raw: path.join(root, config.rawDir ?? 'raw'),
+    raw: path.join(root, 'raw'),
     wiki,
     sources: path.join(wiki, 'sources'),
     entities: path.join(wiki, 'entities'),
@@ -18,7 +18,7 @@ export function kbPaths(root, config = {}) {
     manifest: path.join(root, '.manifest.json'),
     scanPlan: path.join(root, '.scan-plan.json'),
     config: path.join(root, 'wiki.config.json'),
-    schemaFile: path.join(root, config.schemaFile ?? 'AGENTS.md'),
+    schemaFile: path.join(root, 'AGENTS.md'),
     llmsTxt: path.join(root, 'llms.txt'),
     readme: path.join(root, 'README.md'),
   }

@@ -19,7 +19,7 @@ const INDEX_SKELETON = `# Index
 `
 
 export function initKb(root) {
-  const p = kbPaths(root, DEFAULT_CONFIG)
+  const p = kbPaths(root)
   const created = []
   const skipped = []
   const dir = (d) => {
@@ -31,7 +31,7 @@ export function initKb(root) {
   dir(root)
   dir(p.raw)
   dir(p.sources); dir(p.entities); dir(p.concepts); dir(p.comparisons)
-  const { rawDir, schemaFile, linkStyle, ...emittedConfig } = DEFAULT_CONFIG
+  const { linkStyle, ...emittedConfig } = DEFAULT_CONFIG
   file(p.config, JSON.stringify(emittedConfig, null, 2) + '\n')
   file(p.schemaFile, agentsMdTemplate(DEFAULT_CONFIG))
   file(p.readme, readmeTemplate(path.basename(path.resolve(root))))
