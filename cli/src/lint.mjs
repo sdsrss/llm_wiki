@@ -4,6 +4,7 @@ import { kbPaths } from './paths.mjs'
 import { DEFAULT_CONFIG } from './templates.mjs'
 import { listWikiPages, validatePage, isInvalidated, PAGE_STATUSES } from './pages.mjs'
 import { extractWikilinks, buildIndex } from './indexer.mjs'
+import { loadManifest } from './manifest.mjs'
 
 export async function lintKb(kbRoot, { fix = false } = {}) {
   const p = kbPaths(kbRoot)
@@ -63,6 +64,25 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
     // Only flag small shared-tag clusters: 2-5 pages are plausible contradiction candidates.
     // Larger groups are navigation/topic tags (one tag on dozens of pages) — unactionable noise.
     if (list.length >= 2 && list.length <= 5) semantic.push({ task: 'contradiction-scan', detail: `tag "${tag}": ${list.join(', ')}` })
+  }
+
+  // stale-scan: a raw file reconverted after a page's last update means the page may
+  // describe an outdated version of its source. Deterministic candidate generation;
+  // the LLM judges whether the page actually needs updating (STALE benchmark: LLMs
+  // detect staleness unaided at only ~55% accuracy — never rely on spontaneous detection).
+  const manifest = loadManifest(kbRoot)
+  const convertedAtByRaw = new Map()
+  for (const entry of Object.values(manifest.files)) {
+    if (entry.raw && entry.convertedAt) convertedAtByRaw.set(entry.raw, entry.convertedAt)
+  }
+  for (const pg of pages) {
+    if (pg.error || isInvalidated(pg)) continue
+    const updated = String(pg.data.updated ?? '')
+    if (!updated) continue
+    for (const src of pg.data.sources ?? []) {
+      const conv = convertedAtByRaw.get(String(src))
+      if (conv && conv > updated) semantic.push({ task: 'stale-scan', detail: `${pg.relPath}: ${src} reconverted ${conv}, page updated ${updated}` })
+    }
   }
 
   if (fix) { buildIndex(kbRoot); autoFixed.push('index-rebuilt') }

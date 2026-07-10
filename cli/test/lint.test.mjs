@@ -166,3 +166,35 @@ test('orphan rule exempts comparison pages but not entities', async (t) => {
   assert.ok(!orphans.some(p => p.includes('comparisons/cmp')), 'comparison not flagged as orphan')
   assert.ok(orphans.some(p => p.includes('entities/lone')), 'entity still flagged as orphan')
 })
+
+test('lintKb flags pages whose cited raw was reconverted after the page was updated', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, '.manifest.json'), JSON.stringify({
+    files: { 'doc.md': { hash: 'h', raw: 'raw/doc.md', convertedAt: '2026-07-09' } },
+  }, null, 2))
+  fs.writeFileSync(path.join(d, 'raw/doc.md'), 'recompiled content')
+  fs.writeFileSync(path.join(d, 'wiki/sources/doc.md'),
+    `---\ntype: source\ntitle: Doc\ndescription: d\ntags: [x]\nsources: [raw/doc.md]\ncreated: 2026-06-01\nupdated: 2026-06-01\n---\n\nbody`)
+  // fresh page citing the same raw: no flag
+  fs.writeFileSync(path.join(d, 'wiki/entities/fresh.md'),
+    `---\ntype: entity\ntitle: Fresh\ndescription: d\ntags: [x]\nsources: [raw/doc.md]\ncreated: 2026-07-10\nupdated: 2026-07-10\n---\n\nbody [[sources/doc]]`)
+  const r = await lintKb(d)
+  const stale = r.semantic.filter(s => s.task === 'stale-scan')
+  assert.equal(stale.length, 1)
+  assert.match(stale[0].detail, /sources\/doc\.md/)
+  assert.match(stale[0].detail, /raw\/doc\.md/)
+})
+
+test('lintKb stale-scan skips invalidated pages', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, '.manifest.json'), JSON.stringify({
+    files: { 'doc.md': { hash: 'h', raw: 'raw/doc.md', convertedAt: '2026-07-09' } },
+  }, null, 2))
+  fs.writeFileSync(path.join(d, 'raw/doc.md'), 'recompiled')
+  fs.writeFileSync(path.join(d, 'wiki/sources/doc.md'),
+    `---\ntype: source\ntitle: Doc\ndescription: d\ntags: [x]\nsources: [raw/doc.md]\ncreated: 2026-06-01\nupdated: 2026-06-01\nstatus: invalidated\ninvalidated: 2026-07-01\n---\n\nbody`)
+  const r = await lintKb(d)
+  assert.equal(r.semantic.filter(s => s.task === 'stale-scan').length, 0)
+})
