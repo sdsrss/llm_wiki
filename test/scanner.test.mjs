@@ -40,3 +40,28 @@ test('scanSource: dedup, batching, plan file', async (t) => {
   assert.ok(r.estimate.inputTokens > r.estimate.contentTokens)
   assert.ok(fs.existsSync(path.join(kb, '.scan-plan.json')))
 })
+
+test('scanSource: symlinked dirs are reported as skipped, symlinked files still scanned', async (t) => {
+  const src = tmp(t), kb = tmp(t), outside = tmp(t)
+  initKb(kb)
+  fs.writeFileSync(path.join(outside, 'in-linked-dir.md'), '# Hidden\nbody')
+  fs.writeFileSync(path.join(outside, 'linked-file.md'), '# Linked\nbody')
+  fs.writeFileSync(path.join(src, 'plain.md'), '# Plain\nbody')
+  fs.symlinkSync(outside, path.join(src, 'linked-dir'))
+  fs.symlinkSync(path.join(outside, 'linked-file.md'), path.join(src, 'linked-file.md'))
+  fs.symlinkSync(path.join(src, 'nowhere.md'), path.join(src, 'dangling.md'))
+  const r = await scanSource(src, kb, {})
+  assert.ok(r.skipped.some(s => s.rel === 'linked-dir' && s.reason.includes('symlinked directory')), 'dir symlink surfaces in skipped instead of vanishing')
+  assert.ok(r.skipped.some(s => s.rel === 'dangling.md' && s.reason === 'broken symlink'))
+  assert.ok(r.files.some(f => f.rel === 'linked-file.md'), 'file symlink is followed as before')
+  assert.ok(!r.files.some(f => f.rel.includes('in-linked-dir')), 'linked dir contents not walked')
+})
+
+test('scanSource persist:false computes the report without writing the plan file', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  fs.writeFileSync(path.join(src, 'a.md'), '# A\nbody')
+  const r = await scanSource(src, kb, { persist: false })
+  assert.equal(r.files.length, 1)
+  assert.ok(!fs.existsSync(path.join(kb, '.scan-plan.json')))
+})

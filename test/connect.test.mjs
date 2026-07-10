@@ -39,6 +39,26 @@ test('connect creates CLAUDE.md when absent', (t) => {
   assert.match(fs.readFileSync(path.join(proj, 'CLAUDE.md'), 'utf8'), /llm-wiki:begin/)
 })
 
+// Supply-chain guard: the bare npm name `llm-wiki` belongs to an unrelated
+// third-party package, and an unpinned scoped name lets a future 1.x silently
+// change what generated blocks and installed skills execute.
+test('rendered block and skills pin the CLI invocation to @sdsrs/llm-wiki@0', (t) => {
+  const proj = tmp(t)
+  connectProject(proj, { kb: './kb', role: 'project' })
+  const md = fs.readFileSync(path.join(proj, 'CLAUDE.md'), 'utf8')
+  assert.match(md, /npx @sdsrs\/llm-wiki@0 ask/, 'connect block must pin the major version')
+
+  const skillsDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../skills')
+  for (const name of fs.readdirSync(skillsDir)) {
+    const skillFile = path.join(skillsDir, name, 'SKILL.md')
+    if (!fs.existsSync(skillFile)) continue
+    const text = fs.readFileSync(skillFile, 'utf8')
+    assert.ok(!/npx llm-wiki[ @]/.test(text), `${name}: bare \`npx llm-wiki\` is a different npm package`)
+    const unpinned = text.replace(/@sdsrs\/llm-wiki@0/g, 'PINNED')
+    assert.ok(!unpinned.includes('@sdsrs/llm-wiki'), `${name}: unpinned npx @sdsrs/llm-wiki invocation`)
+  }
+})
+
 test('connect normalizes equivalent kb paths to a single registry entry', (t) => {
   const proj = tmp(t)
   connectProject(proj, { kb: './kb', role: 'project' })

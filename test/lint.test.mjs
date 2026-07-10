@@ -6,6 +6,9 @@ import path from 'node:path'
 import { initKb } from '../src/init.mjs'
 import { lintKb } from '../src/lint.mjs'
 import { statusKb } from '../src/status.mjs'
+import { scanSource } from '../src/scanner.mjs'
+import { runConvertPlan } from '../src/convert-run.mjs'
+import { loadManifest } from '../src/manifest.mjs'
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
@@ -184,6 +187,53 @@ test('lintKb flags pages whose cited raw was reconverted after the page was upda
   assert.equal(stale.length, 1)
   assert.match(stale[0].detail, /sources\/doc\.md/)
   assert.match(stale[0].detail, /raw\/doc\.md/)
+})
+
+test('stale-scan fires end-to-end after a source is changed and reconverted', async (t) => {
+  const d = tmp(t)
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-src-'))
+  t.after(() => fs.rmSync(src, { recursive: true, force: true }))
+  initKb(d)
+  fs.writeFileSync(path.join(src, 'doc.md'), '# Doc\noriginal ' + 'x'.repeat(100))
+  await scanSource(src, d, {})
+  await runConvertPlan(d)
+  const raw = loadManifest(d).files['doc.md'].raw
+  // page written against the first conversion, dated before today's reconvert
+  fs.writeFileSync(path.join(d, 'wiki/sources/doc.md'),
+    `---\ntype: source\ntitle: Doc\ndescription: d\ntags: [x]\nsources: [${raw}]\ncreated: 2000-01-01\nupdated: 2000-01-01\n---\n\nbody`)
+  fs.writeFileSync(path.join(src, 'doc.md'), '# Doc\nrevised ' + 'y'.repeat(100))
+  await scanSource(src, d, {})
+  await runConvertPlan(d)
+  const r = await lintKb(d)
+  const stale = r.semantic.filter(s => s.task === 'stale-scan')
+  assert.equal(stale.length, 1, 'reconversion of a cited source must surface as stale-scan')
+  assert.match(stale[0].detail, /sources\/doc\.md/)
+})
+
+test('statusKb --src does not overwrite the saved scan plan', async (t) => {
+  const d = tmp(t)
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-src-'))
+  t.after(() => fs.rmSync(src, { recursive: true, force: true }))
+  initKb(d)
+  fs.writeFileSync(path.join(src, 'doc.md'), '# Doc\nbody')
+  const sentinel = JSON.stringify({ marker: 'saved-by-explicit-scan' })
+  fs.writeFileSync(path.join(d, '.scan-plan.json'), sentinel)
+  const s = await statusKb(d, src)
+  assert.ok(s.incremental, 'diff still computed')
+  assert.equal(fs.readFileSync(path.join(d, '.scan-plan.json'), 'utf8'), sentinel, 'plan file untouched')
+})
+
+test('promote-concepts accepts hyphen and en-dash pending lines', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const idx = fs.readFileSync(path.join(d, 'wiki/index.md'), 'utf8')
+  fs.writeFileSync(path.join(d, 'wiki/index.md'), idx
+    + '- multi-agent systems - [[sources/a]], [[sources/b]]\n'
+    + '- retrieval – [[sources/a]], [[sources/b]]\n')
+  const r = await lintKb(d)
+  const promos = r.semantic.filter(s => s.task === 'promote-concepts')
+  assert.ok(promos.some(s => s.detail.includes('multi-agent systems (2 sources)')), 'space-hyphen line counted, name kept intact')
+  assert.ok(promos.some(s => s.detail.includes('retrieval (2 sources)')), 'en-dash line counted')
 })
 
 test('lintKb stale-scan skips invalidated pages', async (t) => {

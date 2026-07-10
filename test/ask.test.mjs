@@ -57,8 +57,81 @@ test('askKb rejects when retrieval finds no pages', async (t) => {
   buildIndex(d)
   await assert.rejects(
     () => askKb(d, 'anything at all', {}),
-    /No relevant pages found in the knowledge base\./,
+    /No relevant pages found/,
   )
+})
+
+function llmEnv(t, d) {
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR, { recursive: true })
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+}
+
+test('askKb surfaces the error body on non-ok responses', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  llmEnv(t, d)
+  const fetchImpl = async () => ({ ok: false, status: 429, text: async () => '{"error":{"message":"rate limited, retry later"}}' })
+  await assert.rejects(() => askKb(d, '三层架构有哪些', { fetchImpl }), /429.*rate limited/s)
+})
+
+test('askKb rejects with a clear error on unexpected 200 response shapes', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  llmEnv(t, d)
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ error: { message: 'quota exceeded' } }) })
+  await assert.rejects(() => askKb(d, '三层架构有哪些', { fetchImpl }), /unexpected response shape.*quota exceeded/s)
+})
+
+test('askKb drops lowest-ranked whole pages when over the token budget', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const page = (name, extra) => fs.writeFileSync(path.join(d, `wiki/sources/${name}.md`),
+    `---\ntype: source\ntitle: alpha protocol ${name}\ndescription: alpha protocol notes\ntags: [alpha]\nsources: [raw/a.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nalpha protocol ${extra} ${'filler words here '.repeat(30)}`)
+  page('first', 'primary primary primary alpha protocol alpha protocol')
+  page('second', 'secondary')
+  buildIndex(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ askTokenBudget: 40 }))
+  llmEnv(t, d)
+  let captured
+  const fetchImpl = async (_url, opts) => {
+    captured = JSON.parse(opts.body)
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) }
+  }
+  const r = await askKb(d, 'alpha protocol', { fetchImpl })
+  assert.equal(r.pages.length, 1, 'only the top page fits the 40-token budget')
+  assert.deepEqual(r.trimmed, ['sources/second.md'])
+  const prompt = captured.messages.map(m => m.content).join('\n')
+  assert.ok(!prompt.includes('alpha protocol secondary'), 'trimmed page body must not reach the prompt')
+})
+
+test('token budget cuts at the first overflow — no greedy backfill with smaller pages', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const page = (name, body) => fs.writeFileSync(path.join(d, `wiki/sources/${name}.md`),
+    `---\ntype: source\ntitle: Neutral ${name}\ndescription: neutral notes\ntags: [n]\nsources: [raw/a.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\n${body}`)
+  // Deterministic BM25 order despite rank2's length penalty:
+  // rank1 matches both query terms tf=6 in a short doc, rank2 both terms tf=4
+  // in a long doc, rank3 one term tf=1 in a short doc.
+  page('rank1', 'alphaterm betaterm '.repeat(6) + 'first')
+  page('rank2', 'alphaterm betaterm '.repeat(4) + 'middle ' + 'filler words here '.repeat(200))
+  page('rank3', 'betaterm third')
+  buildIndex(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ askTokenBudget: 120 }))
+  llmEnv(t, d)
+  let captured
+  const fetchImpl = async (_url, opts) => {
+    captured = JSON.parse(opts.body)
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) }
+  }
+  const r = await askKb(d, 'alphaterm betaterm', { fetchImpl })
+  assert.deepEqual(r.pages.map(h => h.relPath), ['sources/rank1.md'],
+    'rank2 overflows the budget, and rank3 must NOT slip in behind it despite fitting')
+  assert.deepEqual(r.trimmed, ['sources/rank2.md', 'sources/rank3.md'])
+  const prompt = captured.messages.map(m => m.content).join('\n')
+  assert.ok(!prompt.includes('third'), 'rank3 body must not reach the prompt')
 })
 
 test('loadLlmConfig: providers form picks first provider with env key set', (t) => {
