@@ -1,3 +1,6 @@
 .code-graph/
 .superpowers/
 node_modules/
+.llm-wiki.json
+.lint-report.json
+.scan-plan.json
