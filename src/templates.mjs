@@ -8,6 +8,7 @@ export const DEFAULT_CONFIG = {
   indexSplitAt: 200,
   language: 'auto',
   linkStyle: 'wikilink',
+  askTokenBudget: 32000,
 }
 
 export function agentsMdTemplate(cfg) {
