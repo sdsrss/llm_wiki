@@ -34,3 +34,10 @@ test('agentsMdTemplate embeds config thresholds and iron rules', () => {
   assert.match(md, /2 distinct sources/) // conceptThreshold interpolated
   assert.match(md, /batch.*5/i)
 })
+
+test('agentsMdTemplate documents the invalidation discipline', () => {
+  const md = agentsMdTemplate(DEFAULT_CONFIG)
+  assert.ok(md.includes('status: invalidated'))
+  assert.ok(md.includes('superseded_by'))
+  assert.ok(md.includes('Never delete'))
+})
