@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { DEFAULT_CONFIG } from './templates.mjs'
-import { listWikiPages, validatePage } from './pages.mjs'
+import { listWikiPages, validatePage, isInvalidated, PAGE_STATUSES } from './pages.mjs'
 import { extractWikilinks, buildIndex } from './indexer.mjs'
 
 export async function lintKb(kbRoot, { fix = false } = {}) {
@@ -29,11 +29,17 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
     for (const src of pg.data.sources ?? []) {
       if (!fs.existsSync(path.join(kbRoot, String(src)))) mechanical.push({ rule: 'missing-raw-source', path: pg.relPath, detail: String(src) })
     }
+    if (pg.data.status !== undefined && !PAGE_STATUSES.includes(pg.data.status)) {
+      mechanical.push({ rule: 'invalid-status', path: pg.relPath, detail: `status "${pg.data.status}" (expected ${PAGE_STATUSES.join(' | ')})` })
+    }
+    if (pg.data.superseded_by !== undefined && !ids.has(String(pg.data.superseded_by))) {
+      mechanical.push({ rule: 'superseded-target-missing', path: pg.relPath, detail: `superseded_by -> ${pg.data.superseded_by}` })
+    }
   }
   for (const pg of pages) {
     if (pg.error) continue
     const id = pg.relPath.replace(/\.md$/, '')
-    if (pg.data.type !== 'source' && pg.data.type !== 'comparison' && !incoming.has(id)) mechanical.push({ rule: 'orphan-page', path: pg.relPath, detail: 'no incoming wikilinks' })
+    if (pg.data.type !== 'source' && pg.data.type !== 'comparison' && !isInvalidated(pg) && !incoming.has(id)) mechanical.push({ rule: 'orphan-page', path: pg.relPath, detail: 'no incoming wikilinks' })
   }
 
   if (fs.existsSync(p.indexMd)) {

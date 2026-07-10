@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { parseFrontmatter, serializeFrontmatter } from '../src/frontmatter.mjs'
-import { listWikiPages, validatePage } from '../src/pages.mjs'
+import { listWikiPages, validatePage, isInvalidated } from '../src/pages.mjs'
 import { initKb } from '../src/init.mjs'
 
 function tmp(t) {
@@ -52,4 +52,10 @@ test('listWikiPages + validatePage', (t) => {
   const issues = validatePage(bad)
   assert.ok(issues.some(i => i.includes('title')))
   assert.ok(issues.some(i => i.includes('sources')), 'entity requires sources field')
+})
+
+test('isInvalidated reads the optional status field', () => {
+  assert.equal(isInvalidated({ data: { status: 'invalidated' } }), true)
+  assert.equal(isInvalidated({ data: { status: 'active' } }), false)
+  assert.equal(isInvalidated({ data: {} }), false)
 })

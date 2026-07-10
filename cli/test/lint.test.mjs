@@ -47,6 +47,35 @@ test('lintKb flags broken raw body links but not valid ones', async (t) => {
   assert.match(broken[0].detail, /raw\/missing-file/)
 })
 
+test('lintKb validates invalidation fields and exempts invalidated pages from orphan rule', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'raw/r.md'), 'raw')
+  // invalidated page: bad status value on one page, dangling superseded_by on another
+  fs.writeFileSync(path.join(d, 'wiki/entities/old.md'),
+    `---\ntype: entity\ntitle: Old\ndescription: d\ntags: [x]\nsources: [raw/r.md]\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: invalidated\ninvalidated: 2026-07-09\nsuperseded_by: entities/ghost\n---\n\nbody`)
+  fs.writeFileSync(path.join(d, 'wiki/entities/typo.md'),
+    `---\ntype: entity\ntitle: Typo\ndescription: d\ntags: [x]\nsources: [raw/r.md]\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: outdated\n---\n\nbody [[entities/old]]`)
+  const r = await lintKb(d)
+  const rules = r.mechanical.map(i => i.rule)
+  assert.ok(rules.includes('superseded-target-missing'))
+  assert.ok(rules.includes('invalid-status'))
+  // entities/old is invalidated AND has an incoming link; entities/typo has none.
+  const orphans = r.mechanical.filter(i => i.rule === 'orphan-page').map(i => i.path)
+  assert.ok(orphans.includes('entities/typo.md'))
+  assert.ok(!orphans.includes('entities/old.md'))
+})
+
+test('lintKb orphan exemption covers invalidated pages with no incoming links', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'raw/r.md'), 'raw')
+  fs.writeFileSync(path.join(d, 'wiki/entities/retired.md'),
+    `---\ntype: entity\ntitle: Retired\ndescription: d\ntags: [x]\nsources: [raw/r.md]\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: invalidated\ninvalidated: 2026-07-09\n---\n\nbody`)
+  const r = await lintKb(d)
+  assert.ok(!r.mechanical.some(i => i.rule === 'orphan-page' && i.path === 'entities/retired.md'))
+})
+
 test('statusKb reports uncompiled raw files', async (t) => {
   const d = tmp(t)
   initKb(d)

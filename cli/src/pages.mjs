@@ -6,6 +6,12 @@ import { parseFrontmatter } from './frontmatter.mjs'
 const PAGE_DIRS = ['sources', 'entities', 'concepts', 'comparisons']
 const REQUIRED = ['type', 'title', 'description', 'tags', 'created', 'updated']
 
+export const PAGE_STATUSES = ['active', 'invalidated']
+
+export function isInvalidated(page) {
+  return page.data?.status === 'invalidated'
+}
+
 export function listWikiPages(kbRoot) {
   const p = kbPaths(kbRoot)
   const pages = []
