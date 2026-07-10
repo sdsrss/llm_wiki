@@ -31,7 +31,8 @@ export function initKb(root) {
   dir(root)
   dir(p.raw)
   dir(p.sources); dir(p.entities); dir(p.concepts); dir(p.comparisons)
-  file(p.config, JSON.stringify(DEFAULT_CONFIG, null, 2) + '\n')
+  const { rawDir, schemaFile, linkStyle, ...emittedConfig } = DEFAULT_CONFIG
+  file(p.config, JSON.stringify(emittedConfig, null, 2) + '\n')
   file(p.schemaFile, agentsMdTemplate(DEFAULT_CONFIG))
   file(p.readme, readmeTemplate(path.basename(path.resolve(root))))
   file(p.manifest, JSON.stringify({ files: {} }, null, 2) + '\n')

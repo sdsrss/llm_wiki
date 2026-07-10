@@ -19,7 +19,10 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
     if (pg.error) { mechanical.push({ rule: 'invalid-frontmatter', path: pg.relPath, detail: pg.error }); continue }
     for (const issue of validatePage(pg)) mechanical.push({ rule: 'missing-field', path: pg.relPath, detail: issue })
     for (const target of extractWikilinks(pg.body)) {
-      if (target.startsWith('raw/')) continue
+      if (target.startsWith('raw/')) {
+        if (!fs.existsSync(path.join(kbRoot, target)) && !fs.existsSync(path.join(kbRoot, target + '.md'))) mechanical.push({ rule: 'broken-raw-link', path: pg.relPath, detail: `-> ${target}` })
+        continue
+      }
       if (!ids.has(target)) mechanical.push({ rule: 'broken-wikilink', path: pg.relPath, detail: `-> ${target}` })
       else incoming.set(target, (incoming.get(target) ?? 0) + 1)
     }

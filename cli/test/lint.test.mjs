@@ -35,6 +35,18 @@ test('lintKb finds mechanical issues and semantic candidates', async (t) => {
   assert.ok(fs.existsSync(path.join(d, '.lint-report.json')))
 })
 
+test('lintKb flags broken raw body links but not valid ones', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'raw/present.md'), 'raw content')
+  fs.writeFileSync(path.join(d, 'wiki/sources/s.md'),
+    `---\ntype: source\ntitle: S\ndescription: d\ntags: [x]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nbad [[raw/missing-file.md]] good [[raw/present.md]]`)
+  const r = await lintKb(d)
+  const broken = r.mechanical.filter(i => i.rule === 'broken-raw-link')
+  assert.equal(broken.length, 1)
+  assert.match(broken[0].detail, /raw\/missing-file/)
+})
+
 test('statusKb reports uncompiled raw files', async (t) => {
   const d = tmp(t)
   initKb(d)

@@ -23,6 +23,13 @@ test('initKb creates full structure and is idempotent', (t) => {
     assert.ok(fs.existsSync(path.join(d, f)), `missing ${f}`)
   }
   assert.ok(r1.created.length > 0)
+  const cfg = JSON.parse(fs.readFileSync(path.join(d, 'wiki.config.json'), 'utf8'))
+  for (const k of ['conceptThreshold', 'batchSize', 'indexSplitAt']) {
+    assert.ok(Object.prototype.hasOwnProperty.call(cfg, k), `config missing ${k}`)
+  }
+  for (const k of ['rawDir', 'schemaFile', 'linkStyle']) {
+    assert.ok(!Object.prototype.hasOwnProperty.call(cfg, k), `config should omit inert key ${k}`)
+  }
   const r2 = initKb(d)
   assert.equal(r2.created.length, 0)
   assert.ok(r2.skipped.length > 0)
