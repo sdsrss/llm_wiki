@@ -9,6 +9,16 @@
 
 ### Fixed (audit batch, 2026-07-10)
 
+- **fix: `index` no longer swallows user sections added after "Pending
+  concepts".** The pending section is now bounded at the next `## ` heading;
+  anything after it is carried over verbatim on rebuild. `lint` uses the same
+  boundary, so list items in user sections are no longer counted as pending
+  concepts.
+- **fix: same-basename originals no longer overwrite each other.** Converting
+  `a/doc.pdf` and `b/doc.pdf` now lands `_originals/doc.pdf` and
+  `_originals/doc-2.pdf`; the path is recorded in the manifest (`original`)
+  and reused on re-convert.
+
 - **fix: re-converting a changed source now overwrites its raw file in place.**
   Previously a fresh `-2` suffixed file was created, orphaning the old raw file
   and silently defeating lint's `stale-scan` (pages cite the old raw path while
@@ -25,6 +35,13 @@
 
 ### Changed
 
+- **`ask` zero-hit fallback** — when BM25 finds no lexical match (e.g. the
+  question is in a different language than the KB pages), `ask` now lets the
+  model select pages from the KB listing (`llms.txt`, or `index.md` if
+  absent) and answers from those whole pages instead of erroring out. Only
+  ids of real, non-invalidated pages are accepted from the model's reply;
+  `--retrieve-only` remains pure BM25. The CLI notes when the fallback was
+  used, and `askKb` returns `fallback: 'index'`.
 - **`ask` token budget** — selected pages are dropped (whole, lowest BM25 rank
   first) when they exceed `askTokenBudget` (`wiki.config.json`, default 32000);
   the CLI reports which pages were dropped. Pages are never truncated.

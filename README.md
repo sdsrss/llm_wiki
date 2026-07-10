@@ -39,12 +39,14 @@ CLI does not call an LLM to build pages, only to `ask`.
 `ask` supports `-k <n>` (pages to load) and `--retrieve-only` (locate pages by
 BM25 without calling the LLM). All commands take `--kb <dir>` (default `.`).
 
-Retrieval is lexical (BM25), so ask in the language the KB pages are written
-in — a Chinese question against an English-only KB finds nothing (use
-`--retrieve-only` or the `wiki-query` skill, which browses via `index.md`,
-to work around it). Pages are always sent whole; when the selected pages
-exceed `askTokenBudget` (`wiki.config.json`, default 32000), the
-lowest-ranked pages are dropped, never truncated.
+Retrieval is lexical (BM25). When it finds nothing — typically a question
+asked in a different language than the KB pages, or fully rephrased — `ask`
+falls back to letting the model pick pages from the KB listing
+(`llms.txt`), then answers from those pages as usual; only ids of real,
+non-invalidated pages are accepted. `--retrieve-only` stays pure BM25.
+Pages are always sent whole; when the selected pages exceed
+`askTokenBudget` (`wiki.config.json`, default 32000), the lowest-ranked
+pages are dropped, never truncated.
 
 ## LLM config
 
