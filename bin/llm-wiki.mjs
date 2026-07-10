@@ -62,6 +62,7 @@ program.command('ask <question>')
       for (const h of r.pages) console.log(`${h.score.toFixed(2)}  ${h.relPath}`)
     } else {
       console.log(r.answer)
+      if (r.fallback) console.log('\n(BM25 found no lexical match; pages were selected from the KB listing by the model)')
       if (r.trimmed?.length) console.log(`\n(token budget: dropped ${r.trimmed.length} lower-ranked page(s): ${r.trimmed.join(', ')} — raise askTokenBudget in wiki.config.json to include them)`)
       console.log(`\n--- pages used: ${r.pages.map(h => h.relPath).join(', ')}`)
     }
