@@ -10,6 +10,7 @@ import { askKb } from '../src/ask.mjs'
 import { lintKb } from '../src/lint.mjs'
 import { statusKb } from '../src/status.mjs'
 import { connectProject, installSkills } from '../src/connect.mjs'
+import { exportGraph } from '../src/export.mjs'
 
 program.name('llm-wiki').description('Compile messy directories into an llm_wiki knowledge base')
 
@@ -107,6 +108,16 @@ program.command('install-skills')
     const repoSkills = path.resolve(fileURLToPath(import.meta.url), '../..', 'skills')
     const { installed } = installSkills(opts.target, repoSkills)
     console.log(`installed skills: ${installed.join(', ')}`)
+  })
+
+program.command('export')
+  .description('export wiki/graph.json as GraphML, Cypher, or a self-contained HTML viewer')
+  .option('--kb <dir>', 'knowledge base root', '.')
+  .requiredOption('--format <format>', 'graphml | cypher | html')
+  .option('--out <file>', 'output path (default: <kb>/graph.<ext>)')
+  .action((opts) => {
+    const r = exportGraph(opts.kb, { format: opts.format, out: opts.out })
+    console.log(`exported ${r.nodeCount} nodes / ${r.edgeCount} edges -> ${r.out}`)
   })
 
 program.parseAsync().catch((err) => { console.error(err.message); process.exit(1) })
