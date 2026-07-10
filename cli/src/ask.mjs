@@ -3,7 +3,7 @@ import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { listWikiPages } from './pages.mjs'
 import { buildBm25Index, searchBm25 } from './bm25.mjs'
-import { loadLlmConfig, makeDispatcher } from './llm-config.mjs'
+import { loadLlmConfig, makeTransport } from './llm-config.mjs'
 
 export function retrievePages(kbRoot, question, k = 6) {
   const pages = listWikiPages(kbRoot).filter(p => !p.error)
@@ -14,7 +14,7 @@ export function retrievePages(kbRoot, question, k = 6) {
   return searchBm25(idx, question, k).map(h => ({ relPath: h.id, score: h.score }))
 }
 
-export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fetchImpl = fetch } = {}) {
+export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fetchImpl } = {}) {
   const p = kbPaths(kbRoot)
   const hits = retrievePages(kbRoot, question, k)
   if (retrieveOnly) return { pages: hits, answer: null }
@@ -26,12 +26,14 @@ export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fet
     { role: 'system', content: 'You answer strictly from the provided llm_wiki pages. Cite pages inline as [[dir/slug]]. If the pages do not contain the answer, say so. Answer in the language of the question.' },
     { role: 'user', content: `Knowledge base index:\n${index}\n\nRelevant full pages:\n${fullPages.join('\n')}\n\nQuestion: ${question}` },
   ]
-  const dispatcher = await makeDispatcher()
-  const res = await fetchImpl(`${cfg.baseURL.replace(/\/$/, '')}/chat/completions`, {
+  // Injected fetchImpl (tests) is used as-is with no dispatcher; otherwise
+  // pick the proxy-aware transport (undici fetch + agent, or global fetch).
+  const t = fetchImpl ? { fetchImpl, dispatcher: undefined } : await makeTransport()
+  const res = await t.fetchImpl(`${cfg.baseURL.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
     body: JSON.stringify({ model: cfg.model, messages }),
-    ...(dispatcher ? { dispatcher } : {}),
+    ...(t.dispatcher ? { dispatcher: t.dispatcher } : {}),
   })
   if (!res.ok) throw new Error(`LLM API error: ${res.status ?? 'network'}`)
   const data = await res.json()

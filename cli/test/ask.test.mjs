@@ -6,7 +6,7 @@ import path from 'node:path'
 import { initKb } from '../src/init.mjs'
 import { buildIndex } from '../src/indexer.mjs'
 import { askKb } from '../src/ask.mjs'
-import { loadLlmConfig } from '../src/llm-config.mjs'
+import { loadLlmConfig, makeTransport } from '../src/llm-config.mjs'
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
@@ -89,4 +89,26 @@ test('loadLlmConfig returns null when nothing configured', (t) => {
     if (saved.or) process.env.OPENROUTER_API_KEY = saved.or
   })
   assert.equal(loadLlmConfig(d), null)
+})
+
+test('makeTransport: global fetch without proxy, undici fetch + dispatcher with proxy', async (t) => {
+  const PROXY_VARS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']
+  const saved = Object.fromEntries(PROXY_VARS.map(v => [v, process.env[v]]))
+  t.after(() => {
+    for (const v of PROXY_VARS) {
+      if (saved[v] === undefined) delete process.env[v]
+      else process.env[v] = saved[v]
+    }
+  })
+  for (const v of PROXY_VARS) delete process.env[v]
+  const bare = await makeTransport()
+  assert.equal(bare.fetchImpl, globalThis.fetch)
+  assert.equal(bare.dispatcher, undefined)
+  process.env.HTTPS_PROXY = 'http://127.0.0.1:1'
+  const proxied = await makeTransport()
+  assert.notEqual(proxied.fetchImpl, globalThis.fetch, 'proxy transport must use undici fetch, not built-in fetch')
+  assert.equal(typeof proxied.fetchImpl, 'function')
+  assert.ok(proxied.dispatcher, 'dispatcher instance expected when proxy env is set')
+  assert.equal(typeof proxied.dispatcher.dispatch, 'function')
+  await proxied.dispatcher.close()
 })

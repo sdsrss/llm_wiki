@@ -40,10 +40,14 @@ export function loadLlmConfig(kbRoot) {
   return cfg
 }
 
-export function makeDispatcher() {
+// Node's built-in fetch rejects the npm undici package's dispatcher
+// ("invalid onRequestStart method": handler interface mismatch between
+// undici 8.x and Node's bundled undici), so when a proxy is configured we
+// must use undici's own fetch together with its EnvHttpProxyAgent.
+export async function makeTransport() {
   const hasProxy = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']
     .some(v => process.env[v])
-  if (!hasProxy) return undefined
-  // lazy import so tests without undici installed paths still run fast
-  return import('undici').then(({ EnvHttpProxyAgent }) => new EnvHttpProxyAgent())
+  if (!hasProxy) return { fetchImpl: globalThis.fetch, dispatcher: undefined }
+  const { fetch: proxyFetch, EnvHttpProxyAgent } = await import('undici')
+  return { fetchImpl: proxyFetch, dispatcher: new EnvHttpProxyAgent() }
 }
