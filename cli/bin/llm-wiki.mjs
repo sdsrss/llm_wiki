@@ -84,6 +84,10 @@ program.command('status')
     const s = await statusKb(opts.kb, opts.src)
     if (s.incremental) console.log(`src diff: +${s.incremental.added} ~${s.incremental.changed} -${s.incremental.removed} =${s.incremental.unchanged}`)
     console.log(s.uncompiledRaw.length ? `uncompiled raw:\n  ${s.uncompiledRaw.join('\n  ')}` : 'all raw files compiled')
+    for (const a of s.affectedPages) {
+      const pages = a.pages.length ? a.pages.map(id => `[[${id}]]`).join(' ') : '(no wiki pages cite its raw output)'
+      console.log(`${a.kind}: ${a.src} -> ${pages}`)
+    }
   })
 
 program.command('connect <projectDir>')

@@ -93,6 +93,50 @@ test('statusKb finds uncompiled raw files in subdirectories', async (t) => {
   assert.ok(s.uncompiledRaw.includes('raw/sub/x.md'))
 })
 
+test('statusKb maps changed sources to the wiki pages citing their raw output', async (t) => {
+  const d = tmp(t)
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-src-'))
+  t.after(() => fs.rmSync(src, { recursive: true, force: true }))
+  initKb(d)
+  // manifest says doc.md was compiled to raw/doc.md with hash "stale"
+  fs.writeFileSync(path.join(d, '.manifest.json'), JSON.stringify({
+    files: { 'doc.md': { hash: 'stale', raw: 'raw/doc.md', convertedAt: '2026-07-01' } },
+  }, null, 2))
+  fs.writeFileSync(path.join(d, 'raw/doc.md'), 'compiled')
+  fs.writeFileSync(path.join(d, 'wiki/sources/doc.md'),
+    `---\ntype: source\ntitle: Doc\ndescription: d\ntags: [x]\nsources: [raw/doc.md]\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nbody`)
+  fs.writeFileSync(path.join(src, 'doc.md'), 'new upstream content')
+  const s = await statusKb(d, src)
+  const changed = s.affectedPages.find(a => a.src === 'doc.md')
+  assert.equal(changed.kind, 'changed')
+  assert.equal(changed.raw, 'raw/doc.md')
+  assert.deepEqual(changed.pages, ['sources/doc'])
+})
+
+test('statusKb reports removed sources with their dependent pages', async (t) => {
+  const d = tmp(t)
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-src-'))
+  t.after(() => fs.rmSync(src, { recursive: true, force: true }))
+  initKb(d)
+  fs.writeFileSync(path.join(d, '.manifest.json'), JSON.stringify({
+    files: { 'gone.md': { hash: 'h1', raw: 'raw/gone.md', convertedAt: '2026-07-01' } },
+  }, null, 2))
+  fs.writeFileSync(path.join(d, 'raw/gone.md'), 'compiled')
+  fs.writeFileSync(path.join(d, 'wiki/sources/gone.md'),
+    `---\ntype: source\ntitle: Gone\ndescription: d\ntags: [x]\nsources: [raw/gone.md]\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nbody`)
+  const s = await statusKb(d, src) // src dir is empty -> gone.md removed
+  const removed = s.affectedPages.find(a => a.src === 'gone.md')
+  assert.equal(removed.kind, 'removed')
+  assert.deepEqual(removed.pages, ['sources/gone'])
+})
+
+test('statusKb affectedPages is empty without srcDir', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const s = await statusKb(d)
+  assert.deepEqual(s.affectedPages, [])
+})
+
 test('contradiction-scan caps at small shared-tag groups', async (t) => {
   const d = tmp(t)
   initKb(d)
