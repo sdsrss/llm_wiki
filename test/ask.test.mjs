@@ -5,7 +5,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { initKb } from '../src/init.mjs'
 import { buildIndex } from '../src/indexer.mjs'
-import { askKb, retrievePages } from '../src/ask.mjs'
+import { askKb, retrievePages, rrfFuse, locatePages } from '../src/ask.mjs'
+import { saveVectorStore } from '../src/vector.mjs'
 import { loadLlmConfig, makeTransport } from '../src/llm-config.mjs'
 
 function tmp(t) {
@@ -279,6 +280,76 @@ test('retrievePages excludes invalidated pages', async (t) => {
   const hits = retrievePages(d, 'alpha protocol', 6)
   assert.ok(hits.some(h => h.relPath === 'entities/alpha.md'))
   assert.ok(!hits.some(h => h.relPath === 'entities/alpha-old.md'))
+})
+
+test('rrfFuse merges ranked lists, dedupes by relPath, labels sources', () => {
+  const fused = rrfFuse([
+    { source: 'bm25', hits: [{ relPath: 'a.md' }, { relPath: 'b.md' }] },
+    { source: 'vector', hits: [{ relPath: 'b.md' }, { relPath: 'c.md' }] },
+  ], 3)
+  assert.equal(fused[0].relPath, 'b.md') // in both lists -> highest RRF mass
+  assert.deepEqual(fused[0].sources, ['bm25', 'vector'])
+  assert.deepEqual(fused.map(h => h.relPath), ['b.md', 'a.md', 'c.md'])
+  assert.ok(fused[0].score > fused[1].score && fused[1].score > fused[2].score)
+})
+
+test('locatePages stays pure BM25 when vectorEnabled is false or sidecar missing', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const r = await locatePages(d, '三层架构有哪些')
+  assert.equal(r.usedVector, false)
+  assert.deepEqual(r.hits[0].sources, ['bm25'])
+  assert.equal(r.hits[0].relPath, 'sources/karpathy-gist.md')
+})
+
+test('locatePages fuses vector hits: cross-language query BM25 misses, vector finds', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true }))
+  saveVectorStore(d, { model: 'emb-1', dim: 2, pages: {
+    'sources/karpathy-gist.md': { hash: 'h', vec: [1, 0] },
+    'sources/other.md': { hash: 'h', vec: [0, 1] },
+  } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-1' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  // query embedding points at karpathy-gist; the query shares no tokens with any page
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ data: [{ index: 0, embedding: [1, 0] }] }) })
+  const r = await locatePages(d, 'what are the three layers', { fetchImpl })
+  assert.equal(r.usedVector, true)
+  assert.equal(r.hits[0].relPath, 'sources/karpathy-gist.md')
+  assert.ok(r.hits[0].sources.includes('vector'))
+})
+
+test('locatePages degrades to BM25 with a warning when the embedding call fails', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true }))
+  saveVectorStore(d, { model: 'emb-1', dim: 2, pages: { 'sources/other.md': { hash: 'h', vec: [0, 1] } } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-1' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  const warnings = []
+  const orig = process.stderr.write.bind(process.stderr)
+  process.stderr.write = (s) => { warnings.push(String(s)); return true }
+  t.after(() => { process.stderr.write = orig })
+  const fetchImpl = async () => ({ ok: false, status: 500, text: async () => 'boom' })
+  const r = await locatePages(d, '三层架构有哪些', { fetchImpl })
+  assert.equal(r.usedVector, false)
+  assert.deepEqual(r.hits[0].sources, ['bm25'])
+  assert.match(warnings.join(''), /vector retrieval unavailable/)
+})
+
+test('askKb retrieveOnly carries source labels through locatePages', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const r = await askKb(d, '三层架构有哪些', { retrieveOnly: true })
+  assert.equal(r.answer, null)
+  assert.deepEqual(r.pages[0].sources, ['bm25'])
 })
 
 test('makeTransport: global fetch without proxy, undici fetch + dispatcher with proxy', async (t) => {

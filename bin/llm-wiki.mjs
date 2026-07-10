@@ -69,7 +69,7 @@ program.command('ask <question>')
     if (!Number.isFinite(k) || k < 1) { console.error(`invalid -k value: ${opts.k} (expected a positive integer)`); process.exit(1) }
     const r = await askKb(opts.kb, question, { k, retrieveOnly: opts.retrieveOnly })
     if (opts.retrieveOnly) {
-      for (const h of r.pages) console.log(`${h.score.toFixed(2)}  ${h.relPath}`)
+      for (const h of r.pages) console.log(`${h.score.toFixed(3)}  ${h.relPath}  [${(h.sources ?? ['bm25']).join('+')}]`)
     } else {
       console.log(r.answer)
       if (r.fallback) console.log('\n(BM25 found no lexical match; pages were selected from the KB listing by the model)')

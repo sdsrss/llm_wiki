@@ -6,6 +6,8 @@ import { listWikiPages, isInvalidated } from './pages.mjs'
 import { buildBm25Index, searchBm25 } from './bm25.mjs'
 import { estimateTokens } from './scanner.mjs'
 import { loadLlmConfig, makeTransport } from './llm-config.mjs'
+import { loadVectorStore, normalize, cosineTopK } from './vector.mjs'
+import { embedTexts } from './embed.mjs'
 
 export function retrievePages(kbRoot, question, k = 6) {
   const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
@@ -14,6 +16,44 @@ export function retrievePages(kbRoot, question, k = 6) {
     text: [p.data.title, p.data.description, (p.data.tags ?? []).join(' '), p.body].join('\n'),
   })))
   return searchBm25(idx, question, k).map(h => ({ relPath: h.id, score: h.score }))
+}
+
+const RRF_K = 60
+
+export function rrfFuse(lists, k) {
+  const acc = new Map()
+  for (const { source, hits } of lists) {
+    hits.forEach((h, i) => {
+      const e = acc.get(h.relPath) ?? { relPath: h.relPath, score: 0, sources: [] }
+      e.score += 1 / (RRF_K + i + 1)
+      e.sources.push(source)
+      acc.set(h.relPath, e)
+    })
+  }
+  return [...acc.values()].sort((a, b) => b.score - a.score).slice(0, k)
+}
+
+// BM25 always; vector channel only when opted in (vectorEnabled) AND the
+// sidecar exists AND an embeddingModel is configured. Fail-open: any vector
+// error degrades to BM25 with a single stderr warning.
+export async function locatePages(kbRoot, question, { k = 6, fetchImpl } = {}) {
+  const bm25 = retrievePages(kbRoot, question, k)
+  const asBm25 = () => ({ hits: bm25.map(h => ({ ...h, sources: ['bm25'] })), usedVector: false })
+  if (!loadKbConfig(kbRoot).vectorEnabled) return asBm25()
+  const store = loadVectorStore(kbRoot)
+  if (!store) return asBm25()
+  const cfg = loadLlmConfig(kbRoot)
+  if (!cfg?.embeddingModel) return asBm25()
+  try {
+    const t = fetchImpl ? { fetchImpl, dispatcher: undefined } : await makeTransport()
+    const [qv] = await embedTexts(cfg, t, [question])
+    const qn = normalize(qv)
+    const vecHits = qn ? cosineTopK(qn, store, k).map(v => ({ relPath: v.id, score: v.score })) : []
+    return { hits: rrfFuse([{ source: 'bm25', hits: bm25 }, { source: 'vector', hits: vecHits }], k), usedVector: true }
+  } catch (err) {
+    process.stderr.write(`warning: vector retrieval unavailable (${err.message}); falling back to BM25\n`)
+    return asBm25()
+  }
 }
 
 async function chatCompletion(cfg, t, messages) {
@@ -71,7 +111,7 @@ async function pickPagesFromListing(p, question, k, cfg, t, validIds) {
 
 export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fetchImpl } = {}) {
   const p = kbPaths(kbRoot)
-  let hits = retrievePages(kbRoot, question, k)
+  let { hits } = await locatePages(kbRoot, question, { k, fetchImpl })
   if (retrieveOnly) return { pages: hits, answer: null }
   let validIds
   if (hits.length === 0) {

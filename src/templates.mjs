@@ -11,6 +11,7 @@ export const DEFAULT_CONFIG = {
   language: 'auto',
   linkStyle: 'wikilink',
   askTokenBudget: 32000,
+  vectorEnabled: false,
 }
 
 // Single reader for wiki.config.json (defaults merged) — every consumer used
