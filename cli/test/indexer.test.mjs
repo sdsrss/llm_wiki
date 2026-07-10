@@ -53,3 +53,22 @@ test('buildIndex routes unknown types to an Other section, graph keeps raw type'
   const graph = JSON.parse(fs.readFileSync(path.join(d, 'wiki/graph.json'), 'utf8'))
   assert.equal(graph.nodes.find(n => n.id === 'entities/ds').type, 'dataset')
 })
+
+test('buildIndex annotates invalidated pages, excludes them from llms.txt, and adds superseded_by edges', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/entities/new.md'),
+    `---\ntype: entity\ntitle: New\ndescription: current\ntags: [x]\nsources: []\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nbody [[entities/old]]`)
+  fs.writeFileSync(path.join(d, 'wiki/entities/old.md'),
+    `---\ntype: entity\ntitle: Old\ndescription: obsolete\ntags: [x]\nsources: []\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: invalidated\ninvalidated: 2026-07-09\nsuperseded_by: entities/new\n---\n\nbody`)
+  buildIndex(d)
+  const index = fs.readFileSync(path.join(d, 'wiki/index.md'), 'utf8')
+  assert.match(index, /\[\[entities\/old\]\].*invalidated, superseded by \[\[entities\/new\]\]/)
+  const llms = fs.readFileSync(path.join(d, 'llms.txt'), 'utf8')
+  assert.ok(llms.includes('New'))
+  assert.ok(!llms.includes('obsolete'))
+  const graph = JSON.parse(fs.readFileSync(path.join(d, 'wiki/graph.json'), 'utf8'))
+  assert.equal(graph.nodes.find(n => n.id === 'entities/old').status, 'invalidated')
+  assert.equal(graph.nodes.find(n => n.id === 'entities/new').status, undefined)
+  assert.ok(graph.edges.some(e => e.source === 'entities/old' && e.target === 'entities/new' && e.type === 'superseded_by'))
+})
