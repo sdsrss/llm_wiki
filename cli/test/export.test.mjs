@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { initKb } from '../src/init.mjs'
 import { buildIndex } from '../src/indexer.mjs'
-import { exportGraph, loadGraph, toGraphML, toCypher } from '../src/export.mjs'
+import { exportGraph, loadGraph, toGraphML, toCypher, toHtml } from '../src/export.mjs'
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
@@ -67,4 +67,23 @@ test('exportGraph errors helpfully when graph.json is missing', (t) => {
   initKb(d)
   fs.rmSync(path.join(d, 'wiki/graph.json'), { force: true })
   assert.throws(() => exportGraph(d, { format: 'cypher' }), /llm-wiki index/)
+})
+
+test('toHtml embeds the graph, is self-contained, and survives </script> in titles', (t) => {
+  const d = seedKb(t)
+  const graph = loadGraph(d)
+  graph.nodes[0].title = 'evil</script><script>alert(1)'
+  const html = toHtml(graph)
+  assert.ok(html.includes('<canvas'))
+  assert.ok(!html.includes('evil</script>'))          // must be escaped
+  assert.ok(!/src\s*=\s*["']https?:/.test(html))      // no external scripts
+  assert.ok(!/href\s*=\s*["']https?:/.test(html))     // no external styles
+  assert.ok(html.includes('sources/doc'))
+})
+
+test('exportGraph html format writes graph.html', (t) => {
+  const d = seedKb(t)
+  const r = exportGraph(d, { format: 'html' })
+  assert.ok(r.out.endsWith('graph.html'))
+  assert.ok(fs.readFileSync(r.out, 'utf8').includes('<canvas'))
 })

@@ -61,7 +61,110 @@ export function toCypher(graph) {
   return lines.join('\n') + '\n'
 }
 
-const RENDERERS = { graphml: toGraphML, cypher: toCypher }
+export function toHtml(graph) {
+  // <-escape keeps any "</script>" inside titles from terminating the script block.
+  const data = JSON.stringify({ nodes: graph.nodes, edges: graph.edges }).replace(/</g, '\\u003c')
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>llm_wiki graph</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; color: #ddd; font: 12px system-ui, sans-serif; }
+  #legend { position: fixed; top: 8px; left: 8px; background: #000a; padding: 6px 10px; border-radius: 6px; }
+  #legend span { margin-right: 10px; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="legend"></div>
+<canvas id="c"></canvas>
+<script>
+const GRAPH = ${data}
+const COLORS = { source: '#4e9af1', entity: '#5fbf77', concept: '#c98bdb', comparison: '#e0b25c', raw: '#777' }
+const canvas = document.getElementById('c')
+const ctx = canvas.getContext('2d')
+let W, H
+function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight }
+resize(); addEventListener('resize', resize)
+
+document.getElementById('legend').innerHTML = Object.entries(COLORS)
+  .map(([t, c]) => '<span><b style="color:' + c + '">●</b> ' + t + '</span>').join('')
+  + '<span>◌ invalidated</span><span>drag: pan · wheel: zoom</span>'
+
+const nodes = GRAPH.nodes.map((n, i) => ({
+  ...n,
+  x: Math.cos(i * 2.399963) * (60 + 14 * Math.sqrt(i)),
+  y: Math.sin(i * 2.399963) * (60 + 14 * Math.sqrt(i)),
+  vx: 0, vy: 0,
+}))
+const byId = new Map(nodes.map(n => [n.id, n]))
+const edges = GRAPH.edges.map(e => ({ ...e, a: byId.get(e.source), b: byId.get(e.target) })).filter(e => e.a && e.b)
+
+let scale = Math.min(2, 500 / (60 + 14 * Math.sqrt(nodes.length))), ox = 0, oy = 0
+let dragging = false, px = 0, py = 0, hover = null
+canvas.onmousedown = (e) => { dragging = true; px = e.clientX; py = e.clientY }
+onmouseup = () => { dragging = false }
+onmousemove = (e) => {
+  if (dragging) { ox += e.clientX - px; oy += e.clientY - py; px = e.clientX; py = e.clientY; return }
+  const mx = (e.clientX - W / 2 - ox) / scale, my = (e.clientY - H / 2 - oy) / scale
+  hover = null
+  for (const n of nodes) if ((n.x - mx) ** 2 + (n.y - my) ** 2 < 100) { hover = n; break }
+}
+canvas.onwheel = (e) => { e.preventDefault(); scale *= e.deltaY < 0 ? 1.1 : 0.9 }
+
+let ticks = 0
+function step() {
+  if (ticks++ < 300) {
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j]
+      let dx = a.x - b.x, dy = a.y - b.y
+      const d2 = dx * dx + dy * dy || 1
+      const f = Math.min(1200 / d2, 4)
+      dx *= f / Math.sqrt(d2); dy *= f / Math.sqrt(d2)
+      a.vx += dx; a.vy += dy; b.vx -= dx; b.vy -= dy
+    }
+    for (const e of edges) {
+      const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y
+      const d = Math.sqrt(dx * dx + dy * dy) || 1
+      const f = (d - 60) * 0.01
+      e.a.vx += dx / d * f; e.a.vy += dy / d * f
+      e.b.vx -= dx / d * f; e.b.vy -= dy / d * f
+    }
+    for (const n of nodes) { n.vx *= 0.85; n.vy *= 0.85; n.x += n.vx; n.y += n.vy }
+  }
+  ctx.clearRect(0, 0, W, H)
+  ctx.save()
+  ctx.translate(W / 2 + ox, H / 2 + oy)
+  ctx.scale(scale, scale)
+  ctx.strokeStyle = '#444'
+  for (const e of edges) {
+    ctx.setLineDash(e.type === 'superseded_by' ? [4, 3] : [])
+    ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke()
+  }
+  ctx.setLineDash([])
+  for (const n of nodes) {
+    ctx.fillStyle = COLORS[n.type] ?? '#aaa'
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.type === 'raw' ? 3 : 6, 0, 7); ctx.fill()
+    if (n.status === 'invalidated') {
+      ctx.strokeStyle = '#e05c5c'; ctx.setLineDash([2, 2])
+      ctx.beginPath(); ctx.arc(n.x, n.y, 9, 0, 7); ctx.stroke(); ctx.setLineDash([])
+    }
+  }
+  ctx.fillStyle = '#ddd'
+  if (scale > 0.8) for (const n of nodes) if (n.type !== 'raw') ctx.fillText(n.title ?? n.id, n.x + 8, n.y + 3)
+  if (hover) { ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#fff'; ctx.fillText(hover.id + (hover.status ? ' [' + hover.status + ']' : ''), hover.x + 8, hover.y - 8); ctx.font = '12px system-ui' }
+  ctx.restore()
+  requestAnimationFrame(step)
+}
+step()
+</script>
+</body>
+</html>
+`
+}
+
+const RENDERERS = { graphml: toGraphML, cypher: toCypher, html: toHtml }
 
 export function exportGraph(kbRoot, { format, out } = {}) {
   const render = RENDERERS[format]
