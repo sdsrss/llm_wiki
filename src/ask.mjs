@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
-import { DEFAULT_CONFIG } from './templates.mjs'
+import { loadKbConfig } from './templates.mjs'
 import { listWikiPages, isInvalidated } from './pages.mjs'
 import { buildBm25Index, searchBm25 } from './bm25.mjs'
 import { estimateTokens } from './scanner.mjs'
@@ -94,7 +94,7 @@ export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fet
   const index = fs.existsSync(p.indexMd) ? fs.readFileSync(p.indexMd, 'utf8') : ''
   // Whole pages only (never chunks). When the loaded pages would blow the token
   // budget, drop trailing pages (lowest BM25 rank) rather than truncating any page.
-  const kbCfg = fs.existsSync(p.config) ? { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(p.config, 'utf8')) } : DEFAULT_CONFIG
+  const kbCfg = loadKbConfig(kbRoot)
   const loaded = []
   const trimmed = []
   let used = 0

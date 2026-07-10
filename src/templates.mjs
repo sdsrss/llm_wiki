@@ -1,3 +1,7 @@
+import fs from 'node:fs'
+import { kbPaths } from './paths.mjs'
+import { readJsonFile } from './json.mjs'
+
 export const DEFAULT_CONFIG = {
   schemaFile: 'AGENTS.md',
   rawDir: 'raw',
@@ -9,6 +13,14 @@ export const DEFAULT_CONFIG = {
   language: 'auto',
   linkStyle: 'wikilink',
   askTokenBudget: 32000,
+}
+
+// Single reader for wiki.config.json (defaults merged) — every consumer used
+// to inline this parse, each with its own bare-SyntaxError failure mode.
+export function loadKbConfig(kbRoot) {
+  const p = kbPaths(kbRoot)
+  if (!fs.existsSync(p.config)) return DEFAULT_CONFIG
+  return { ...DEFAULT_CONFIG, ...readJsonFile(p.config) }
 }
 
 export function agentsMdTemplate(cfg) {

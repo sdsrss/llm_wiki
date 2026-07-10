@@ -3,6 +3,7 @@ import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { convertFile, slugify } from './convert.mjs'
 import { loadManifest, saveManifest } from './manifest.mjs'
+import { readJsonFile } from './json.mjs'
 
 function uniquePath(dir, slug) {
   let candidate = path.join(dir, `${slug}.md`)
@@ -22,7 +23,11 @@ function uniqueOriginalPath(dir, base) {
 
 export async function runConvertPlan(kbRoot) {
   const p = kbPaths(kbRoot)
-  const plan = JSON.parse(fs.readFileSync(p.scanPlan, 'utf8'))
+  if (!fs.existsSync(p.scanPlan)) throw new Error(`${p.scanPlan} not found — run \`llm-wiki scan\` first.`)
+  const plan = readJsonFile(p.scanPlan)
+  if (!Array.isArray(plan?.files) || !Array.isArray(plan?.batches) || typeof plan?.srcDir !== 'string') {
+    throw new Error(`${p.scanPlan}: unexpected shape (needs files/batches/srcDir) — re-run \`llm-wiki scan\`.`)
+  }
   const manifest = loadManifest(kbRoot)
   const byRel = new Map(plan.files.map(f => [f.rel, f]))
   const converted = []
@@ -31,6 +36,9 @@ export async function runConvertPlan(kbRoot) {
   for (const rel of plan.batches.flat()) {
     const srcAbs = path.join(plan.srcDir, rel)
     const entry = byRel.get(rel)
+    // A hand-edited or stale plan can list a batch entry with no files record;
+    // surface it as a failed conversion instead of a bare TypeError below.
+    if (!entry) { failed.push({ src: rel, warnings: ['not in the scan plan file list — re-run `llm-wiki scan`'] }); continue }
     const { markdown, warnings } = await convertFile(srcAbs)
     if (markdown === null) { failed.push({ src: rel, warnings }); continue }
     // Re-converting a changed source overwrites its previous raw file in place.

@@ -1,14 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
-import { DEFAULT_CONFIG } from './templates.mjs'
+import { loadKbConfig } from './templates.mjs'
 import { listWikiPages, validatePage, isInvalidated, PAGE_STATUSES } from './pages.mjs'
 import { extractWikilinks, buildIndex } from './indexer.mjs'
 import { loadManifest } from './manifest.mjs'
 
 export async function lintKb(kbRoot, { fix = false } = {}) {
   const p = kbPaths(kbRoot)
-  const cfg = fs.existsSync(p.config) ? { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(p.config, 'utf8')) } : DEFAULT_CONFIG
+  const cfg = loadKbConfig(kbRoot)
   const pages = listWikiPages(kbRoot)
   const mechanical = []
   const semantic = []

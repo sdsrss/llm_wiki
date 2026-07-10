@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
-import { DEFAULT_CONFIG } from './templates.mjs'
+import { loadKbConfig } from './templates.mjs'
 import { SUPPORTED_EXTS } from './convert.mjs'
 import { sha256File, minhashSignature, jaccardEstimate } from './hashing.mjs'
 import { loadManifest, diffManifest } from './manifest.mjs'
@@ -30,12 +30,6 @@ function* walk(dir, base = dir, skippedDirs = []) {
     } else if (e.isDirectory()) yield* walk(abs, base, skippedDirs)
     else yield path.relative(base, abs)
   }
-}
-
-function loadKbConfig(kbRoot) {
-  const p = kbPaths(kbRoot)
-  if (fs.existsSync(p.config)) return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(p.config, 'utf8')) }
-  return DEFAULT_CONFIG
 }
 
 // `persist: false` runs a read-only scan (e.g. for `status`) that does not

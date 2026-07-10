@@ -1,10 +1,11 @@
 import fs from 'node:fs'
 import { kbPaths } from './paths.mjs'
+import { readJsonFile } from './json.mjs'
 
 export function loadManifest(kbRoot) {
   const p = kbPaths(kbRoot)
   if (!fs.existsSync(p.manifest)) return { files: {} }
-  return JSON.parse(fs.readFileSync(p.manifest, 'utf8'))
+  return readJsonFile(p.manifest)
 }
 
 export function saveManifest(kbRoot, manifest) {

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
+import { readJsonFile } from './json.mjs'
 
 const BUILTIN = {
   priority: ['openai', 'openrouter'],
@@ -25,14 +26,17 @@ function resolveProviders(fileCfg) {
 export function loadLlmConfig(kbRoot) {
   const dir = process.env.LLM_WIKI_CONFIG_DIR ?? path.join(os.homedir(), '.llm-wiki')
   const globalFile = path.join(dir, 'config.json')
-  const fileCfg = fs.existsSync(globalFile) ? JSON.parse(fs.readFileSync(globalFile, 'utf8')) : {}
+  // redactContents: this file holds API keys — a corrupt-JSON error must not
+  // echo a fragment of it to the terminal.
+  const fileCfg = fs.existsSync(globalFile) ? readJsonFile(globalFile, { redactContents: true }) : {}
   // flat form: explicit custom endpoint wins outright
   let cfg = (fileCfg.baseURL && fileCfg.apiKey && fileCfg.model)
     ? { baseURL: fileCfg.baseURL, apiKey: fileCfg.apiKey, model: fileCfg.model }
     : resolveProviders(fileCfg)
   const p = kbPaths(kbRoot)
   if (fs.existsSync(p.config)) {
-    const kbCfg = JSON.parse(fs.readFileSync(p.config, 'utf8'))
+    // May contain an apiKey when the kb-override opt-in is used — redact too.
+    const kbCfg = readJsonFile(p.config, { redactContents: true })
     if (kbCfg.llm) {
       if (process.env.LLM_WIKI_ALLOW_KB_LLM_OVERRIDE === '1') {
         // Opt-in: trust the KB fully (e.g. your own first-party KB).
