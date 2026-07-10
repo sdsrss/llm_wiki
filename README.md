@@ -35,6 +35,7 @@ CLI does not call an LLM to build pages, only to `ask`.
 | `lint` | mechanical checks + a semantic worklist for the agent |
 | `status` | incremental state: uncompiled raw files, source-dir diff, affected wiki pages |
 | `export` | export the wiki graph as GraphML, Cypher, or a self-contained interactive HTML viewer |
+| `mcp` | run a read-only MCP server (stdio) over the KB — for Cursor/Windsurf and other MCP-only agents |
 
 `ask` supports `-k <n>` (pages to load) and `--retrieve-only` (locate pages by
 BM25 without calling the LLM). All commands take `--kb <dir>` (default `.`).
@@ -89,6 +90,20 @@ npx @sdsrs/llm-wiki connect <projectDir> --kb <path>  # register a KB into a pro
 > npm rename say `npx llm-wiki ...` — on npm that bare name is an **unrelated
 > third-party package**. Re-run `connect` once per project to refresh the
 > sentinel block (it is rewritten in place, idempotently).
+
+## MCP server
+
+For agents that speak MCP but cannot run the bundled skills (Cursor, Windsurf, …):
+
+```json
+{ "mcpServers": { "my-kb": { "command": "npx", "args": ["-y", "@sdsrs/llm-wiki@0", "mcp", "--kb", "/path/to/my-kb"] } } }
+```
+
+Four read-only tools: `wiki_overview` (index catalog), `wiki_search` (BM25 page
+locator — ids + descriptions, never full text), `wiki_read_page` (one whole page
+by id), `wiki_ask` (one-shot Q&A with citations; needs `~/.llm-wiki/config.json`,
+errors with guidance otherwise). Page content is served as untrusted data with an
+explicit notice, mirroring the skills' prompt-injection posture.
 
 ## KB layout
 

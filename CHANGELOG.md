@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **MCP server (v2.0)**: `llm-wiki mcp --kb <dir>` exposes the KB over stdio MCP —
+  `wiki_overview` / `wiki_search` / `wiki_read_page` / `wiki_ask` (all read-only,
+  whole pages only, untrusted-data notice on every result). Opens llm-wiki to
+  MCP-only agents (Cursor, Windsurf). New deps: `@modelcontextprotocol/sdk`, `zod`.
+
 ## 0.3.0 (2026-07-10)
 
 No breaking changes; no KB migration needed. Two behavior changes you may

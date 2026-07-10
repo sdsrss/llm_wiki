@@ -11,6 +11,7 @@ import { lintKb } from '../src/lint.mjs'
 import { statusKb } from '../src/status.mjs'
 import { connectProject, installSkills } from '../src/connect.mjs'
 import { exportGraph } from '../src/export.mjs'
+import { runMcpServer } from '../src/mcp.mjs'
 
 program.name('llm-wiki').description('Compile messy directories into an llm_wiki knowledge base')
 
@@ -120,6 +121,14 @@ program.command('export')
   .action((opts) => {
     const r = exportGraph(opts.kb, { format: opts.format, out: opts.out })
     console.log(`exported ${r.nodeCount} nodes / ${r.edgeCount} edges -> ${r.out}`)
+  })
+
+program.command('mcp')
+  .description('run a read-only MCP server (stdio) over the knowledge base')
+  .option('--kb <dir>', 'knowledge base root', '.')
+  .action(async (opts) => {
+    // stdout belongs to the MCP transport from here on — no console.log.
+    await runMcpServer(opts.kb)
   })
 
 program.parseAsync().catch((err) => { console.error(err.message); process.exit(1) })

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { initKb } from '../src/init.mjs'
@@ -145,4 +147,36 @@ test('wiki_ask without LLM config errors and points at search+read', async (t) =
   const r = await client.callTool({ name: 'wiki_ask', arguments: { question: '三层架构有哪些' } })
   assert.equal(r.isError, true)
   assert.match(r.content[0].text, /wiki_search/, 'degradation guidance present')
+})
+
+test('llm-wiki mcp speaks MCP over stdio (initialize + tools/list)', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const bin = path.resolve(fileURLToPath(import.meta.url), '../../bin/llm-wiki.mjs')
+  const child = spawn(process.execPath, [bin, 'mcp', '--kb', d], { stdio: ['pipe', 'pipe', 'pipe'] })
+  t.after(() => child.kill())
+  const send = (msg) => child.stdin.write(JSON.stringify(msg) + '\n')
+  const lines = []
+  let resolveReady
+  const ready = new Promise(r => { resolveReady = r })
+  let buf = ''
+  child.stdout.on('data', (chunk) => {
+    buf += chunk.toString()
+    let i
+    while ((i = buf.indexOf('\n')) !== -1) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1)
+      if (line) lines.push(JSON.parse(line))
+      if (lines.length >= 2) resolveReady()
+    }
+  })
+  send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '0' } } })
+  // notifications/initialized then tools/list, per MCP handshake
+  send({ jsonrpc: '2.0', method: 'notifications/initialized' })
+  send({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
+  await ready
+  const init = lines.find(m => m.id === 1)
+  assert.equal(init.result.serverInfo.name, 'llm-wiki')
+  const toolsMsg = lines.find(m => m.id === 2)
+  const names = toolsMsg.result.tools.map(tl => tl.name).sort()
+  assert.deepEqual(names, ['wiki_ask', 'wiki_overview', 'wiki_read_page', 'wiki_search'])
 })
