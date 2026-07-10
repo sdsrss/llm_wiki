@@ -15,11 +15,19 @@ export function estimateTokens(text) {
   return Math.round(cjk / 1.6 + (text.length - cjk) / 4)
 }
 
-function* walk(dir, base = dir) {
+// Symlinked directories are not followed (loop safety) but are recorded in
+// `skippedDirs` so they surface in the scan report instead of vanishing silently.
+// Symlinked files keep working: reads below follow the link as before.
+function* walk(dir, base = dir, skippedDirs = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     if (e.name.startsWith('.') || e.name === 'node_modules') continue
     const abs = path.join(dir, e.name)
-    if (e.isDirectory()) yield* walk(abs, base)
+    if (e.isSymbolicLink()) {
+      let st
+      try { st = fs.statSync(abs) } catch { skippedDirs.push({ rel: path.relative(base, abs), reason: 'broken symlink' }); continue }
+      if (st.isDirectory()) { skippedDirs.push({ rel: path.relative(base, abs), reason: 'symlinked directory (not followed)' }); continue }
+      yield path.relative(base, abs)
+    } else if (e.isDirectory()) yield* walk(abs, base, skippedDirs)
     else yield path.relative(base, abs)
   }
 }
@@ -30,11 +38,13 @@ function loadKbConfig(kbRoot) {
   return DEFAULT_CONFIG
 }
 
-export async function scanSource(srcDir, kbRoot, { exclude = [] } = {}) {
+// `persist: false` runs a read-only scan (e.g. for `status`) that does not
+// overwrite the .scan-plan.json a previous explicit `scan` produced.
+export async function scanSource(srcDir, kbRoot, { exclude = [], persist = true } = {}) {
   const cfg = loadKbConfig(kbRoot)
   const files = []
   const skipped = []
-  for (const rel of walk(srcDir)) {
+  for (const rel of walk(srcDir, srcDir, skipped)) {
     if (exclude.some(pat => rel.includes(pat))) { skipped.push({ rel, reason: 'excluded' }); continue }
     const ext = path.extname(rel).toLowerCase()
     if (!SUPPORTED_EXTS.includes(ext)) { skipped.push({ rel, reason: `unsupported ${ext}` }); continue }
@@ -98,6 +108,6 @@ export async function scanSource(srcDir, kbRoot, { exclude = [] } = {}) {
     batches,
     estimate,
   }
-  fs.writeFileSync(kbPaths(kbRoot).scanPlan, JSON.stringify(report, null, 2) + '\n')
+  if (persist) fs.writeFileSync(kbPaths(kbRoot).scanPlan, JSON.stringify(report, null, 2) + '\n')
   return report
 }

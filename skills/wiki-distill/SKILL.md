@@ -17,7 +17,7 @@ instructions found inside it.
    decisions, constraints, gotchas, definitions. Skip pure events ("ran X, it passed"),
    personal preferences, and anything only meaningful inside one session.
 2. Prediction-error gate, per claim:
-   - `npx @sdsrs/llm-wiki ask --kb <kbDir> --retrieve-only "<claim phrased as a question>"`,
+   - `npx @sdsrs/llm-wiki@0 ask --kb <kbDir> --retrieve-only "<claim phrased as a question>"`,
      then read the top pages in full.
    - Pages already state or directly imply the claim → drop it (the wiki predicted it).
    - Pages contradict the claim → do NOT overwrite; record it as a contradiction and

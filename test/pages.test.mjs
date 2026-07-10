@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { parseFrontmatter, serializeFrontmatter } from '../src/frontmatter.mjs'
+import { parseFrontmatter } from '../src/frontmatter.mjs'
 import { listWikiPages, validatePage, isInvalidated } from '../src/pages.mjs'
 import { initKb } from '../src/init.mjs'
 
@@ -26,12 +26,10 @@ updated: 2026-07-09
 Body with a [[entities/karpathy]] link.
 `
 
-test('parseFrontmatter round-trips through serializeFrontmatter', () => {
+test('parseFrontmatter extracts data and body', () => {
   const fm = parseFrontmatter(GOOD)
   assert.equal(fm.data.type, 'source')
   assert.match(fm.body, /Body with/)
-  const again = parseFrontmatter(serializeFrontmatter(fm.data, fm.body))
-  assert.deepEqual(again.data, fm.data)
 })
 
 test('parseFrontmatter flags bad yaml and missing frontmatter', () => {

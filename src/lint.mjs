@@ -46,7 +46,9 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
   if (fs.existsSync(p.indexMd)) {
     const pendingSection = fs.readFileSync(p.indexMd, 'utf8').match(/## Pending concepts([\s\S]*)$/)?.[1] ?? ''
     for (const line of pendingSection.split('\n')) {
-      const m = line.match(/^-\s*(.+?)\s*—/)
+      // Dash flavors: em/en dash with optional space, or a space-delimited hyphen
+      // (`- foo - [[a]]`) — a bare `-` would stop inside hyphenated names like multi-agent.
+      const m = line.match(/^-\s*(.+?)(?:\s*[—–]|\s+-\s)/)
       if (!m) continue
       const refs = (line.match(/\[\[/g) ?? []).length
       if (refs >= cfg.conceptThreshold) semantic.push({ task: 'promote-concepts', detail: `${m[1]} (${refs} sources)` })

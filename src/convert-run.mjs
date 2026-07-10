@@ -24,7 +24,13 @@ export async function runConvertPlan(kbRoot) {
     const entry = byRel.get(rel)
     const { markdown, warnings } = await convertFile(srcAbs)
     if (markdown === null) { failed.push({ src: rel, warnings }); continue }
-    const rawAbs = uniquePath(p.raw, slugify(path.basename(rel)))
+    // Re-converting a changed source overwrites its previous raw file in place.
+    // A fresh uniquePath here would orphan the old raw file AND break lint's
+    // stale-scan (pages cite the old raw path, the manifest would point at the new one).
+    const prev = manifest.files[rel]
+    const rawAbs = prev?.raw && fs.existsSync(path.join(kbRoot, prev.raw))
+      ? path.join(kbRoot, prev.raw)
+      : uniquePath(p.raw, slugify(path.basename(rel)))
     fs.writeFileSync(rawAbs, markdown)
     const ext = path.extname(rel).toLowerCase()
     if (ext !== '.md' && ext !== '.markdown') {

@@ -46,7 +46,10 @@ export async function statusKb(kbRoot, srcDir) {
   const affectedPages = []
   if (srcDir) {
     const manifest = loadManifest(kbRoot)
-    const report = await scanSource(srcDir, kbRoot, {})
+    // Read-only scan: status must not clobber the plan an explicit `scan` saved.
+    // (The diff itself still scans everything — it does not replay the saved
+    // plan's --exclude patterns, so excluded files can appear in affectedPages.)
+    const report = await scanSource(srcDir, kbRoot, { persist: false })
     incremental = report.incremental
     const diff = diffManifest(manifest, report.files.map(f => ({ rel: f.rel, hash: f.hash })))
     const entry = (e, kind) => {

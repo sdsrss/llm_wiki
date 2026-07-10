@@ -10,7 +10,3 @@ export function parseFrontmatter(text) {
   if (data === null || typeof data !== 'object') return { error: 'invalid-yaml' }
   return { data, body: text.slice(m[0].length) }
 }
-
-export function serializeFrontmatter(data, body) {
-  return `---\n${YAML.stringify(data)}---\n\n${body.replace(/^\n+/, '')}`
-}
