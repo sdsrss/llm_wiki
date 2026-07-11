@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.6.4 (2026-07-11)
+
+Six fixes from a full-pipeline self-test pass (as a real user across every
+command). No breaking changes, no KB migration, no config change. Suite 179 →
+185.
+
+- **fix(convert): PDF conversion was 100% broken** and is now restored. The code
+  imported `pdf-parse/lib/pdf-parse.js` — the v1 subpath — but the pinned
+  dependency is pdf-parse v2, whose export map has no such subpath, so *every*
+  PDF failed at import time before any parsing. Switched to the v2 API
+  (`new PDFParse({ data }).getText()`). It slipped through because there was no
+  PDF fixture and the only test fed garbage bytes, which the import failure also
+  satisfied; added a real `test/fixtures/hello.pdf` + a positive extraction test.
+- fix(ask): `ask --retrieve-only` no longer prints nothing (exit 0) when
+  retrieval locates zero pages — the state right after `init`/`scan`, before the
+  wiki is built. It now emits a diagnostic to stderr (stdout stays pipe-clean),
+  matching the LLM path which already errored.
+- fix(convert): a source file whose whole basename is emoji/symbols
+  (e.g. `😀.md`) no longer produces a hidden `raw/.md` that `status` skips
+  (silently dropping the source from the incremental workflow). `slugify` now
+  falls back to `untitled`, so the existing `-N` collision handler yields
+  visible, shell-safe names (`untitled.md`, `untitled-2.md`, …).
+- fix(scan): a missing or non-directory source path now gives a human-readable
+  error ("source directory not found: X" / "source path is not a directory: X")
+  instead of a raw `ENOENT`/`ENOTDIR`; also improves `status --src`.
+- fix(export): `export --out path/with/missing/dirs/graph.graphml` now creates
+  the parent directory (matching the markdown-export sibling) instead of leaking
+  a raw `ENOENT`.
+- docs: the layout diagram placed `llms.txt` under `wiki/`, but `index` writes it
+  to the KB root (the llms.txt convention); corrected the diagram and command
+  table.
+
 ## 0.6.3 (2026-07-11)
 
 Two cosmetic fixes from an independent review of 0.6.0–0.6.2; no behavior
