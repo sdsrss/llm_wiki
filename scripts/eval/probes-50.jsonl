@@ -5,8 +5,8 @@
 {"q":"Which Express middleware limits repeated requests using a windowMs option and per-IP limit?","expect":["concepts/express-rate-limit-readme"],"lang":"en","type":"fact"}
 {"q":"In undici, what stable error code string identifies a connect-timeout failure?","expect":["concepts/undici-docs-docs-api-errors"],"lang":"en","type":"fact"}
 {"q":"Which library converts .docx documents such as Word files into clean semantic HTML?","expect":["concepts/mammoth-readme"],"lang":"en","type":"fact"}
-{"q":"哪个模块会在首次 require 时获取并稳健地缓存所有 JS 语言级内建对象（intrinsics）？","expect":["concepts/get-intrinsic-readme"],"lang":"zh-x","type":"xlang"}
-{"q":"哪个库负责解析 HTTP 的 Accept、Accept-Charset、Accept-Encoding 等内容协商请求头？","expect":["concepts/negotiator-history"],"lang":"zh-x","type":"xlang"}
-{"q":"cookie-signature 从哪个版本开始改用内置的 crypto.timingSafeEqual 来做校验？","expect":["concepts/cookie-signature-history"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个模块会在首次加载时获取并稳健地缓存宿主环境里所有语言级的内建对象，即便这些对象随后被删除或篡改仍能取回其原始引用？","expect":["concepts/get-intrinsic-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库依据客户端可接受的字符集、编码、语言与媒体类型，按质量权重挑选最合适的响应形式，其更新历史记录了相关排序逻辑的多次性能优化？","expect":["concepts/negotiator-history"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库的更新历史提到，它在某个版本改用内置的恒定时间比较函数替代早先的双重哈希方式来校验签名，以抵御计时攻击？","expect":["concepts/cookie-signature-history"],"lang":"zh-x","type":"xlang"}
 {"q":"How do I define a GraphQL schema with resolvers and run a query against it?","expect":[],"lang":"en","type":"none"}
 {"q":"How does PyTorch compute gradients using autograd on tensors during backpropagation?","expect":[],"lang":"en","type":"none"}

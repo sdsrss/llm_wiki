@@ -6,10 +6,10 @@
 {"q":"Which module determines the real client address of a proxied request?","expect":["concepts/proxy-addr-readme"],"lang":"en","type":"fact"}
 {"q":"Which package parses a string like 'Text/HTML;Charset=utf-8' into a structured MIMEType object?","expect":["concepts/whatwg-mimetype-readme"],"lang":"en","type":"fact"}
 {"q":"In undici, which API opens a WebSocket connection following the WHATWG spec and RFC 6455?","expect":["concepts/undici-docs-docs-api-websocket"],"lang":"en","type":"fact"}
-{"q":"哪个 JavaScript 模块用于 JSON 对象的签名与加密，支持 JWT、JWS、JWE、JWK 等？","expect":["concepts/jose-readme"],"lang":"zh-x","type":"xlang"}
-{"q":"哪个 Node.js 库实现了 RFC 6265，用于 cookie 的解析、存储与检索？","expect":["concepts/tough-cookie-readme"],"lang":"zh-x","type":"xlang"}
-{"q":"哪个库用于在 JavaScript 中校验和处理 IPv4 与 IPv6 地址？","expect":["concepts/ip-address-readme"],"lang":"zh-x","type":"xlang"}
-{"q":"哪个模块是符合 WhatWG/W3C 规范的服务器推送事件（Server-Sent Events）客户端？","expect":["concepts/eventsource-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个模块实现了一整套面向对象数据的签名与加密标准，涵盖网络令牌、网络签名、网络加密与网络密钥，并能在浏览器及多种服务端运行时通用？","expect":["concepts/jose-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库实现了浏览器在请求头与响应头中携带的小型状态数据的相关规范，负责这类数据的解析、存储与检索？","expect":["concepts/tough-cookie-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库用于校验与处理互联网协议第四版和第六版的地址格式？","expect":["concepts/ip-address-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个模块实现了符合网络标准的服务器推送事件客户端，可通过持久连接接收服务器主动推送的消息流？","expect":["concepts/eventsource-readme"],"lang":"zh-x","type":"xlang"}
 {"q":"How do I run database migrations with the Django ORM in Python?","expect":[],"lang":"en","type":"none"}
 {"q":"How do I write a training loop for a neural network in PyTorch?","expect":[],"lang":"en","type":"none"}
 {"q":"How do I set up GraphQL subscriptions over WebSockets with Apollo Server?","expect":[],"lang":"en","type":"none"}
