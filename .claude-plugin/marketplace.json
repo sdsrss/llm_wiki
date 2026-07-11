@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "llm_wiki plugin marketplace",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "plugins": [
     {
       "name": "llm-wiki",
       "source": "./",
       "description": "Compile messy document directories into Karpathy-style llm_wiki knowledge bases — wiki-build/ingest/query/lint/connect/distill skills backed by the @sdsrs/llm-wiki CLI",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "category": "development"
     }
   ]

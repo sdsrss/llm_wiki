@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-07-11)
+
+All additive — no breaking changes, no KB migration, defaults unchanged
+(vector location stays opt-in via `vectorEnabled: true`). Pin `@sdsrs/llm-wiki@0.3.0`
+to stay on the previous behavior.
 
 - **MCP server (v2.0)**: `llm-wiki mcp --kb <dir>` exposes the KB over stdio MCP —
   `wiki_overview` / `wiki_search` / `wiki_read_page` / `wiki_ask` (all read-only,
