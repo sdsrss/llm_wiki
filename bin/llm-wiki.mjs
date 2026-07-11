@@ -74,6 +74,10 @@ program.command('ask <question>')
     if (!Number.isFinite(k) || k < 1) { console.error(`invalid -k value: ${opts.k} (expected a positive integer)`); process.exit(1) }
     const r = await askKb(opts.kb, question, { k, retrieveOnly: opts.retrieveOnly })
     if (opts.retrieveOnly) {
+      if (r.pages.length === 0) {
+        console.error('no pages located — the KB has no matching wiki pages (build them with the wiki-build skill, or check that wiki/ contains pages)')
+        return
+      }
       for (const h of r.pages) console.log(`${h.score.toFixed(3)}  ${h.relPath}  [${(h.sources ?? ['bm25']).join('+')}]`)
     } else {
       console.log(r.answer)

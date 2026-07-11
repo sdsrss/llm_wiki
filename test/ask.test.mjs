@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -500,4 +501,19 @@ test('locatePages rejects an unknown retrieval mode', async (t) => {
   const d = tmp(t)
   seedKb(d)
   await assert.rejects(locatePages(d, '三层架构', { retrieval: 'fuzzy' }), /unknown retrieval mode: fuzzy/)
+})
+
+// ISSUE-001: `ask --retrieve-only` used to print nothing (exit 0) when no pages
+// were located — the naive-user state right after `init` (wiki not yet built).
+// It must emit a diagnostic to stderr (stdout stays pipe-clean).
+const BIN = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'bin', 'llm-wiki.mjs')
+test('ask --retrieve-only emits a stderr diagnostic (not silence) when 0 pages located', (t) => {
+  const d = tmp(t)
+  initKb(d)          // empty wiki: no pages built yet, vectorEnabled:false → pure BM25, no network
+  buildIndex(d)
+  const r = spawnSync(process.execPath, [BIN, 'ask', 'anything at all', '--kb', d, '--retrieve-only'],
+    { encoding: 'utf8', env: { ...process.env, OPENAI_API_KEY: '', OPENROUTER_API_KEY: '' } })
+  assert.equal(r.status, 0, 'read-only query returning nothing is not an error')
+  assert.equal(r.stdout.trim(), '', 'stdout stays pipe-clean (no page lines)')
+  assert.match(r.stderr, /no pages located/, 'a human-readable diagnostic goes to stderr')
 })
