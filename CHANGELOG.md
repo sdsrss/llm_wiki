@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.6.6 (2026-07-11)
+
+Audit remediation batch (roadmap M2 complete + M3/M4). No breaking changes, no KB
+migration; new config keys default to prior behavior. Suite 185 → 208.
+
+- **feat(cli): `llm-wiki --version`** prints the package version (was an unknown
+  option).
+- **fix(net): LLM and embedding calls now time out and retry.** `chat/completions`
+  and `embeddings` requests go through a shared helper with an `AbortSignal.timeout`
+  ceiling (120s) and exponential-backoff retry on 429 / 5xx / network errors — a
+  hung or rate-limited provider no longer hangs the CLI or aborts a whole `embed`
+  run on one transient failure.
+- **fix(embed): incremental durability.** `embed` now persists the vector store
+  after each batch, so a later batch failing keeps earlier batches' work (the
+  re-run reuses them by content hash — no repeated API cost). The store is written
+  atomically (temp + rename), as is `.manifest.json`.
+- **fix(manifest): tolerate a hand-edited manifest** missing or mistyping the
+  `files` key instead of throwing deep in the diff.
+- **fix(index): no line injection from frontmatter.** Newlines in a page's
+  title/description are collapsed before they are written into `index.md` /
+  `llms.txt`, so a crafted value can't inject headings or spoof wikilinks. Stale
+  `topics/*.md` are pruned when a type empties or the KB drops back below the split
+  threshold.
+- **fix(export): escape newlines in Cypher** node titles so they can't split a
+  statement.
+- **fix(docs): `@0` pin in the generated per-KB README**; corrected a fabricated
+  `supersedes` relation type in the main README to the real vocabulary (with a note
+  that `superseded_by` is a structural edge, not a `relations:` type); command
+  reference now lists `connect` / `install-skills` and documents `--version` /
+  `--follow-symlinks`; added an "Operational envelope" section (scale, no concurrent
+  writers, size cap, kana/hangul BM25 gap).
+- Test coverage: `installSkills` + CLI-layer smokes for `index` / `lint` / `status`
+  / `connect` / `install-skills` / `export` / `graph` and the `-k` / `--depth` /
+  `--top` guards; a timeout on the MCP stdio handshake test.
+
 ## 0.6.5 (2026-07-11)
 
 Three security/robustness fixes from a full architecture-and-security audit
