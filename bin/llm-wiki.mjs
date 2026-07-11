@@ -128,9 +128,9 @@ program.command('install-skills')
   })
 
 program.command('export')
-  .description('export wiki/graph.json (graphml | cypher | html) or a markdown-links copy of the wiki (markdown)')
+  .description('export wiki/graph.json (graphml | cypher | html | canvas) or a markdown-links copy of the wiki (markdown)')
   .option('--kb <dir>', 'knowledge base root', '.')
-  .requiredOption('--format <format>', 'graphml | cypher | html | markdown')
+  .requiredOption('--format <format>', 'graphml | cypher | html | canvas | markdown')
   .option('--out <file>', 'output path (default: <kb>/graph.<ext>, or <kb>/wiki-md/ for markdown)')
   .action((opts) => {
     if (opts.format === 'markdown') {

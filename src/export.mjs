@@ -236,13 +236,71 @@ step()
 `
 }
 
-const RENDERERS = { graphml: toGraphML, cypher: toCypher, html: toHtml }
+// JSON Canvas 1.0 (jsoncanvas.org) — an open node/edge format Obsidian Canvas and
+// other tools read. Nodes are `file` cards pointing at the real KB pages
+// (vault-relative from the KB root, where the .canvas is written), so opening the
+// map in Obsidian gives live, clickable notes. Layout is deterministic — one
+// column per node type, ordered by degree — so exports are stable and diffable.
+const CANVAS_COLORS = { source: '5', entity: '4', concept: '6', comparison: '2' } // JSON Canvas preset ids; raw/unknown → default gray
+const CANVAS_TYPE_ORDER = ['source', 'entity', 'concept', 'comparison', 'raw']
+const CANVAS_NODE_W = 260
+const CANVAS_NODE_H = 60
+const CANVAS_COL_GAP = 340
+const CANVAS_ROW_GAP = 90
+
+export function toCanvas(graph) {
+  const degree = new Map()
+  for (const e of graph.edges) for (const end of [e.source, e.target]) degree.set(end, (degree.get(end) ?? 0) + 1)
+
+  const cols = new Map()
+  for (const n of graph.nodes) {
+    const key = CANVAS_TYPE_ORDER.includes(n.type) ? n.type : 'raw'
+    if (!cols.has(key)) cols.set(key, [])
+    cols.get(key).push(n)
+  }
+  const rank = (t) => { const i = CANVAS_TYPE_ORDER.indexOf(t); return i === -1 ? CANVAS_TYPE_ORDER.length : i }
+  const colKeys = [...cols.keys()].sort((a, b) => rank(a) - rank(b))
+
+  const nodes = []
+  colKeys.forEach((key, ci) => {
+    const column = cols.get(key).sort((a, b) =>
+      (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0) || a.id.localeCompare(b.id))
+    column.forEach((n, ri) => {
+      const node = {
+        id: n.id,
+        type: 'file',
+        file: n.id.startsWith('raw/') ? n.id : `wiki/${n.id}.md`,
+        x: ci * CANVAS_COL_GAP,
+        y: ri * CANVAS_ROW_GAP,
+        width: CANVAS_NODE_W,
+        height: CANVAS_NODE_H,
+      }
+      const color = n.status === 'invalidated' ? '1' : CANVAS_COLORS[n.type]
+      if (color) node.color = color
+      nodes.push(node)
+    })
+  })
+
+  const present = new Set(nodes.map(n => n.id))
+  const edges = graph.edges
+    .filter(e => present.has(e.source) && present.has(e.target))
+    .map((e, i) => {
+      const edge = { id: `e${i}`, fromNode: e.source, toNode: e.target }
+      if (e.type) edge.label = e.type
+      return edge
+    })
+
+  return JSON.stringify({ nodes, edges }, null, 2) + '\n'
+}
+
+const RENDERERS = { graphml: toGraphML, cypher: toCypher, html: toHtml, canvas: toCanvas }
+const EXT = { graphml: 'graphml', cypher: 'cypher', html: 'html', canvas: 'canvas' }
 
 export function exportGraph(kbRoot, { format, out } = {}) {
   const render = RENDERERS[format]
   if (!render) throw new Error(`unknown format: ${format} (expected ${Object.keys(RENDERERS).join(' | ')} | markdown)`)
   const graph = loadGraph(kbRoot)
-  const outPath = out ?? path.join(kbRoot, `graph.${format === 'graphml' ? 'graphml' : format === 'cypher' ? 'cypher' : 'html'}`)
+  const outPath = out ?? path.join(kbRoot, `graph.${EXT[format]}`)
   fs.writeFileSync(outPath, render(graph))
   return { out: outPath, nodeCount: graph.nodes.length, edgeCount: graph.edges.length }
 }

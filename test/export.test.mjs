@@ -3,9 +3,10 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { initKb } from '../src/init.mjs'
 import { buildIndex } from '../src/indexer.mjs'
-import { exportGraph, loadGraph, toGraphML, toCypher, toHtml, wikilinksToMarkdown, exportMarkdownPages } from '../src/export.mjs'
+import { exportGraph, loadGraph, toGraphML, toCypher, toHtml, toCanvas, wikilinksToMarkdown, exportMarkdownPages } from '../src/export.mjs'
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
@@ -171,4 +172,90 @@ test('exportMarkdownPages refuses --out pointing at the KB root or managed layer
   assert.throws(() => exportMarkdownPages(d, { out: d }), /managed layers/, 'refuses the KB root itself')
   // raw/ untouched — no marker leaked into it
   assert.ok(!fs.existsSync(path.join(d, 'raw/.llm-wiki-export')), 'no export marker leaked into raw/')
+})
+
+const BIN = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'bin', 'llm-wiki.mjs')
+
+// Hand-built graph exercising every node type, a raw endpoint, degree ordering,
+// and an invalidated node — independent of any KB on disk.
+function fixtureGraph() {
+  return {
+    nodes: [
+      { id: 'sources/a', type: 'source', title: 'A' },
+      { id: 'entities/b', type: 'entity', title: 'B' },
+      { id: 'concepts/hi', type: 'concept', title: 'Hi' },   // degree 2
+      { id: 'concepts/lo', type: 'concept', title: 'Lo' },   // degree 1
+      { id: 'concepts/dead', type: 'concept', title: 'Dead', status: 'invalidated' },
+      { id: 'comparisons/c', type: 'comparison', title: 'C' },
+      { id: 'raw/doc.md', type: 'raw', title: 'doc.md' },
+    ],
+    edges: [
+      { source: 'sources/a', target: 'raw/doc.md', type: 'source' },
+      { source: 'sources/a', target: 'concepts/hi', type: 'wikilink' },
+      { source: 'concepts/hi', target: 'concepts/lo', type: 'wikilink' },
+      { source: 'entities/b', target: 'nowhere/x', type: 'wikilink' }, // dangling: dropped
+    ],
+  }
+}
+
+test('toCanvas: file cards, type colors, integer column layout', () => {
+  const canvas = JSON.parse(toCanvas(fixtureGraph()))
+  const byId = new Map(canvas.nodes.map(n => [n.id, n]))
+
+  // file mapping: raw ids verbatim, wiki ids -> wiki/<id>.md
+  assert.equal(byId.get('raw/doc.md').file, 'raw/doc.md')
+  assert.equal(byId.get('concepts/hi').file, 'wiki/concepts/hi.md')
+  // every node is a file card with integer geometry
+  for (const n of canvas.nodes) {
+    assert.equal(n.type, 'file')
+    for (const k of ['x', 'y', 'width', 'height']) assert.ok(Number.isInteger(n[k]), `${n.id}.${k} integer`)
+    assert.equal(n.width, 260)
+    assert.equal(n.height, 60)
+  }
+  // colors: source 5 / entity 4 / concept 6 / comparison 2; raw none; invalidated 1
+  assert.equal(byId.get('sources/a').color, '5')
+  assert.equal(byId.get('entities/b').color, '4')
+  assert.equal(byId.get('concepts/hi').color, '6')
+  assert.equal(byId.get('comparisons/c').color, '2')
+  assert.equal('color' in byId.get('raw/doc.md'), false)
+  assert.equal(byId.get('concepts/dead').color, '1') // invalidated overrides concept color
+
+  // columns by type order: source(0) entity(1) concept(2) comparison(3) raw(4)
+  assert.equal(byId.get('sources/a').x, 0)
+  assert.equal(byId.get('entities/b').x, 340)
+  assert.equal(byId.get('concepts/hi').x, 680)
+  assert.equal(byId.get('comparisons/c').x, 1020)
+  assert.equal(byId.get('raw/doc.md').x, 1360)
+
+  // within the concept column, higher degree (hi:2) sits above lower (lo:1)
+  assert.ok(byId.get('concepts/hi').y < byId.get('concepts/lo').y)
+  assert.equal(byId.get('concepts/hi').y, 0)
+})
+
+test('toCanvas: edges carry type labels; dangling edges dropped', () => {
+  const canvas = JSON.parse(toCanvas(fixtureGraph()))
+  assert.equal(canvas.edges.length, 3) // the nowhere/x edge is dropped
+  const e = canvas.edges.find(x => x.fromNode === 'sources/a' && x.toNode === 'concepts/hi')
+  assert.equal(e.label, 'wikilink')
+  assert.ok(e.id) // every edge has an id
+  assert.ok(!canvas.edges.some(x => x.toNode === 'nowhere/x'))
+})
+
+test('exportGraph writes graph.canvas with .canvas extension and valid JSON', (t) => {
+  const d = seedKb(t)
+  const r = exportGraph(d, { format: 'canvas' })
+  assert.ok(r.out.endsWith('graph.canvas'))
+  const canvas = JSON.parse(fs.readFileSync(r.out, 'utf8'))
+  assert.equal(canvas.nodes.length, r.nodeCount)
+  assert.ok(canvas.nodes.every(n => n.type === 'file'))
+  // seedKb's source page maps to a wiki/ file card
+  assert.ok(canvas.nodes.some(n => n.file === 'wiki/sources/doc.md'))
+})
+
+test('export CLI accepts --format canvas', (t) => {
+  const d = seedKb(t)
+  const r = spawnSync(process.execPath, [BIN, 'export', '--kb', d, '--format', 'canvas'], { encoding: 'utf8' })
+  assert.equal(r.status, 0)
+  assert.match(r.stdout, /exported \d+ nodes \/ \d+ edges -> .*graph\.canvas/)
+  assert.ok(fs.existsSync(path.join(d, 'graph.canvas')))
 })

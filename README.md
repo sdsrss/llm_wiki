@@ -90,7 +90,7 @@ npx @sdsrs/llm-wiki@0 ask "what did we decide about X?"
 | `status` | incremental state: uncompiled raw files, source-dir diff, affected wiki pages |
 | `graph` | query `graph.json` with `path` / `neighbors` / `hubs` (zero-LLM traversal) |
 | `embed` | compute/update page embeddings (`wiki/.vectors.json`) for optional vector location |
-| `export` | export the graph as GraphML, Cypher, or an interactive HTML viewer; or the wiki as standard-markdown copies |
+| `export` | export the graph as GraphML, Cypher, JSON Canvas, or an interactive HTML viewer; or the wiki as standard-markdown copies |
 | `mcp` | run a read-only MCP server (stdio) over the KB |
 
 All commands take `--kb <dir>` (default `.`). `ask` supports `-k <n>` (pages to
@@ -144,6 +144,9 @@ relations:
 
 `lint` validates each relation target and type; `ambiguous` marks edges for a
 human to resolve.
+
+`export --format canvas` writes a JSON Canvas (`graph.canvas`) domain map —
+`file` cards laid out by page type that open as live notes in Obsidian Canvas.
 
 ### Skills (Claude Code / Codex)
 
