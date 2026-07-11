@@ -1,6 +1,6 @@
 {
   "name": "llm-wiki",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Compile messy document directories into Karpathy-style llm_wiki knowledge bases. Skills: wiki-build (full compile), wiki-ingest (incremental), wiki-query (cited Q&A), wiki-lint (health check), wiki-connect (wire a KB into a project), wiki-distill (episodic memory -> wiki pages). Deterministic work is done by the bundled @sdsrs/llm-wiki CLI via npx.",
   "author": {
     "name": "sds.rs",

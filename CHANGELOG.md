@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.6.0 (2026-07-11)
+
+No breaking changes, no KB migration. Default behavior unchanged for KBs
+without embeddings; on a KB with `vectorEnabled: true` and a built vector
+store, the MCP `wiki_search` tool now fuses semantic vector matches into its
+results (fail-open — any vector error falls back to BM25). Pin
+`@sdsrs/llm-wiki@0.5.0` to keep pure-BM25 `wiki_search` everywhere. Skill
+texts pick up the new graph-aware procedures on the next `connect`/install.
+
+- feat(mcp): `wiki_search` retrieves via `locatePages` 'auto' mode — BM25
+  always, vector fusion only when the KB opted in; when fusion is active, hit
+  lines name the retrieval channels (`bm25+vector`) instead of a BM25 score,
+  and the zero-hit guidance adapts.
+- feat(skills): wiki-query expands hits with `graph neighbors`, traces
+  cross-topic questions with `graph path`, and states typed relations bound
+  verbatim to graph output (inventing a type is explicitly forbidden);
+  wiki-ingest/wiki-build guide typed `relations` frontmatter on pages already
+  being touched (backfill sweeps FORBIDDEN — O(1) ingest preserved);
+  wiki-lint orders semantic work by `graph hubs` and lists
+  `confidence: ambiguous` relations as the human-review queue.
+- fix(eval): probe `expect` ids are validated against non-invalidated pages
+  (symmetric with answer-eval — an invalidated id now exits 1 instead of
+  silently scoring 0).
+- tests/docs: pinned tests for the unknown-retrieval-mode error and pure-CJK
+  oversized-page embed capping; `locatePages` doc comment covers all three
+  retrieval modes. Suite 165 → 171.
+- Measured 2026-07-11 (./kb, 3 questions, same-model agents, old vs new
+  wiki-query text): graph CLI actually used in 3/3 runs (was 0/3), citations
+  +1 on 2/3 questions, expected-page coverage 4/4 in both arms; skill prompt
+  payload 5464 → 7166 bytes (~ +426 tokens), added runtime cost is zero-LLM
+  CLI calls only.
+
 ## 0.5.0 (2026-07-11)
 
 No breaking changes, no KB migration, defaults unchanged. One behavior fix you
