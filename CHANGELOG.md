@@ -15,6 +15,9 @@
 - feat: MCP tool `wiki_graph` (path/neighbors/hubs)
 - feat: lint validates relations (target exists, type in `relationTypes` vocabulary, confidence value); relation targets count as incoming links for orphan detection
 - feat: GraphML/Cypher exports carry edge confidence
+- feat: `llm-wiki export --format markdown` — wiki copy with [[wikilinks]] converted to relative markdown links (index.md and topics/ included), for tools without wikilink support
+- feat: AGENTS.md contract documents optional `aliases` frontmatter and the Obsidian browse-&-annotate convention (manual edits → rerun `llm-wiki index`)
+- docs: README "Obsidian integration" — vault usage, Bases filtering, graph view, verification checklist
 
 ## 0.3.0 (2026-07-10)
 

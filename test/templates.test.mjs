@@ -61,3 +61,11 @@ test('agentsMdTemplate documents typed relations with the configured vocabulary'
   assert.match(md, /implements, uses, depends_on/)
   assert.match(md, /extracted \| inferred \| ambiguous/)
 })
+
+test('agentsMdTemplate documents aliases and the Obsidian browse-and-annotate convention', () => {
+  const md = agentsMdTemplate(DEFAULT_CONFIG)
+  assert.match(md, /Optional frontmatter: aliases/)
+  assert.match(md, /## Obsidian \(browse & annotate\)/)
+  assert.match(md, /run `llm-wiki index` afterwards/)
+  assert.match(md, /Do not create or edit \.obsidian\//)
+})

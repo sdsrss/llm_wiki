@@ -103,6 +103,54 @@ human to resolve. `llm-wiki lint` validates that each relation target exists and
 its `type` is in the vocabulary, and counts relation targets as incoming links for
 orphan detection.
 
+## Obsidian integration
+
+An llm_wiki KB is a plain folder of markdown with YAML frontmatter, so it opens
+directly as an Obsidian vault — "Open folder as vault", point it at `./kb`. Do not
+pre-create a `.obsidian/` folder; Obsidian creates one with your own settings on
+first open, and llm-wiki never writes it.
+
+What lights up out of the box:
+
+- **Graph view + backlinks** from the path-style `[[wikilinks]]` the pages already
+  use (`[[entities/karpathy]]`) — they resolve across the `sources/`, `entities/`,
+  `concepts/`, `comparisons/` subfolders and populate the graph and backlinks pane.
+- **Properties panel** from the page frontmatter (`type`, `title`, `tags`, `created`,
+  `updated`, …). `tags` and `aliases` are YAML string lists, exactly Obsidian's
+  expected shape (no `#` prefix inside the frontmatter list).
+- **Bases** (a core plugin) reads those properties into table/card views you can
+  filter on `type`, `tags`, or `status` — e.g. a base over `type == "concept"` with a
+  filter `status != "invalidated"` to hide retired pages.
+- **Link previews**: the frontmatter `description` doubles as Obsidian's hover-preview
+  text for a page.
+
+Optional per-page `aliases` (a YAML list of alternative names) feed Obsidian's link
+autocomplete and alternate-name resolution; add them at page creation for topics with
+well-known synonyms, translations, or abbreviations.
+
+Typed `relations` (a list of objects — `to`/`type`/`confidence`) are valid YAML and
+round-trip fine, but a list-of-objects renders best in source mode rather than the
+Properties panel; they are primarily consumed by `llm-wiki graph` / the MCP server, not
+eyeballed in Obsidian.
+
+**Positioning.** Obsidian is for browsing and annotation; agents (via the wiki-* skills)
+remain the writers of `wiki/` pages. If you edit pages by hand in Obsidian, run
+`npx @sdsrs/llm-wiki@0 index --kb <kb>` afterwards to rebuild `index.md`, `graph.json`,
+and `llms.txt`. There is deliberately no bidirectional sync: concurrent writes to the
+same file (agent and editor at once) can corrupt content silently, which is why it stays
+out of scope. For tools that need standard markdown links instead of wikilinks, export a
+converted copy: `npx @sdsrs/llm-wiki@0 export --format markdown --kb <kb>`.
+
+**Verification checklist.** The conventions above are derived from Obsidian's docs, not
+tested against a specific Obsidian build. Run this once after opening the vault to confirm
+them on your Obsidian version:
+
+- [ ] Open `./kb` as a vault ("Open folder as vault").
+- [ ] Graph view shows clusters of typed pages linked by wikilinks.
+- [ ] Open a page — the backlinks panel is non-empty for a linked page.
+- [ ] Create a Base filtered to `type == "concept"`.
+- [ ] Add the filter `status != "invalidated"` and confirm invalidated pages drop out.
+
 ## LLM config
 
 `ask` needs an OpenAI-compatible endpoint. Configure `~/.llm-wiki/config.json`:

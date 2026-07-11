@@ -37,6 +37,10 @@ This file is the contract for any LLM maintaining this knowledge base.
 Every page: YAML frontmatter + a complete, self-contained markdown body.
 Required frontmatter: type, title, description, tags, created, updated.
 Every page also requires: sources (list of raw/... paths — the evidence chain). A source page lists its single raw/ file; every other page lists every raw/ file backing its claims.
+Optional frontmatter: aliases — a YAML list of alternative names for the page's topic
+(Obsidian autocompletes and resolves them as link targets). Add it at page creation
+when the topic has well-known synonyms, translations, or abbreviations; do not sweep
+existing pages to backfill.
 
 | type | dir | rule |
 |---|---|---|
@@ -93,6 +97,15 @@ invalidation for whole pages.
 - lint: run \`llm-wiki lint\`; fix what the report marks auto-fixable, judge the semantic
   items (contradictions, stale claims, concept promotion), report the rest. Do not
   silently rewrite pages outside the reported items.
+
+## Obsidian (browse & annotate)
+The KB folder opens directly as an Obsidian vault ("Open folder as vault"). Obsidian's
+role is browsing and annotation — agents (via skills) remain the writers of wiki/ pages.
+If a human edits pages by hand, run \`llm-wiki index\` afterwards to rebuild
+index/graph/llms.txt. Do not create or edit .obsidian/ — Obsidian manages it.
+Conventions already match Obsidian properties: tags and aliases are YAML string lists
+(no # prefix inside tags); path-style [[wikilinks]] resolve across subfolders and feed
+the graph view; \`status: invalidated\` is filterable in Bases views.
 
 ## Language
 Page language: ${cfg.language === 'auto' ? 'follow the dominant language of the source material' : cfg.language}.
