@@ -252,6 +252,16 @@ test('exportGraph writes graph.canvas with .canvas extension and valid JSON', (t
   assert.ok(canvas.nodes.some(n => n.file === 'wiki/sources/doc.md'))
 })
 
+// ISSUE-006: exportGraph must create a missing --out parent dir (matching the
+// markdown-export sibling) instead of leaking a raw ENOENT.
+test('exportGraph creates a missing --out parent directory', (t) => {
+  const d = seedKb(t)
+  const out = path.join(d, 'nested', 'deeper', 'g.graphml')
+  const r = exportGraph(d, { format: 'graphml', out })
+  assert.equal(r.out, out)
+  assert.ok(fs.existsSync(out), 'file written into an auto-created parent dir')
+})
+
 test('export CLI accepts --format canvas', (t) => {
   const d = seedKb(t)
   const r = spawnSync(process.execPath, [BIN, 'export', '--kb', d, '--format', 'canvas'], { encoding: 'utf8' })

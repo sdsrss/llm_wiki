@@ -301,6 +301,9 @@ export function exportGraph(kbRoot, { format, out } = {}) {
   if (!render) throw new Error(`unknown format: ${format} (expected ${Object.keys(RENDERERS).join(' | ')} | markdown)`)
   const graph = loadGraph(kbRoot)
   const outPath = out ?? path.join(kbRoot, `graph.${EXT[format]}`)
+  // Match the markdown-export sibling: create the parent of an explicit --out so
+  // `--out new/dir/graph.graphml` writes instead of leaking a raw ENOENT.
+  fs.mkdirSync(path.dirname(path.resolve(outPath)), { recursive: true })
   fs.writeFileSync(outPath, render(graph))
   return { out: outPath, nodeCount: graph.nodes.length, edgeCount: graph.edges.length }
 }
