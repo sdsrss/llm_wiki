@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { recallAtK, mrr, summarize, extractCitations, deswap, headToHead, abstentionSummary } from '../scripts/eval/lib.mjs'
+import { recallAtK, mrr, summarize, extractCitations, deswap, headToHead, abstentionSummary, degreeRank } from '../scripts/eval/lib.mjs'
 
 test('recallAtK: fraction of expected ids found in top-k', () => {
   assert.equal(recallAtK(['a', 'b'], ['a', 'x', 'b', 'y'], 2), 0.5)
@@ -82,4 +82,16 @@ test('abstentionSummary splits rates by probe type', () => {
   assert.equal(s.bm25.falseAbstentionRate, 0.5) // on answerable probes — lower is better
   assert.equal(s.bm25.nNone, 2)
   assert.equal(s.bm25.nAnswerable, 2)
+})
+
+test('degreeRank orders ids by wiki in-degree, ignoring raw/ targets, stable on ties', () => {
+  const graph = { nodes: [], edges: [
+    { source: 'a', target: 'b', type: 'wikilink' },
+    { source: 'c', target: 'b', type: 'uses' },
+    { source: 'a', target: 'c', type: 'wikilink' },
+    { source: 'a', target: 'raw/x.md', type: 'source' },
+  ] }
+  assert.deepEqual(degreeRank(graph, ['a', 'c', 'b']), ['b', 'c', 'a'])
+  // tie between a (0) and d (0): input order preserved
+  assert.deepEqual(degreeRank(graph, ['d', 'a']), ['d', 'a'])
 })

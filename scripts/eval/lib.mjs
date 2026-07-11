@@ -60,6 +60,18 @@ export function headToHead(pairs) {
   }))
 }
 
+// Query-independent popularity prior: rank candidate ids by how many graph
+// edges point at them (raw/ file targets excluded, same as `hubs`). Used as a
+// third RRF list in the experimental `graph` arm; sort() is stable, so ties
+// keep the caller's (retrieval) order.
+export function degreeRank(graph, ids) {
+  const indeg = new Map()
+  for (const e of graph.edges) {
+    if (!String(e.target).startsWith('raw/')) indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1)
+  }
+  return [...ids].sort((a, b) => (indeg.get(b) ?? 0) - (indeg.get(a) ?? 0))
+}
+
 export function abstentionSummary(rows) {
   const byArm = {}
   for (const r of rows) (byArm[r.arm] ??= []).push(r)

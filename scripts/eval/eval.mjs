@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Usage: node scripts/eval/eval.mjs --kb ./kb [--probes scripts/eval/probes-kb.jsonl] [--arms bm25,vector,hybrid] [-k 5]
+// Usage: node scripts/eval/eval.mjs --kb ./kb [--probes scripts/eval/probes-kb.jsonl] [--arms bm25,vector,hybrid,graph] [-k 5]
 // bm25 arm needs no network. vector/hybrid need wiki/.vectors.json (run `llm-wiki embed`)
 // plus an embeddingModel in ~/.llm-wiki/config.json.
 import fs from 'node:fs'
@@ -9,7 +9,8 @@ import { loadVectorStore, normalize, cosineTopK } from '../../src/vector.mjs'
 import { embedTexts } from '../../src/embed.mjs'
 import { loadLlmConfig, makeTransport } from '../../src/llm-config.mjs'
 import { listWikiPages } from '../../src/pages.mjs'
-import { recallAtK, mrr, summarize } from './lib.mjs'
+import { readJsonFile } from '../../src/json.mjs'
+import { recallAtK, mrr, summarize, degreeRank } from './lib.mjs'
 
 const args = process.argv.slice(2)
 const opt = (name, dflt) => { const i = args.indexOf(name); return i === -1 ? dflt : args[i + 1] }
@@ -48,6 +49,16 @@ if (needVec) {
   t = await makeTransport()
 }
 
+let graphData = null
+if (arms.includes('graph')) {
+  const gPath = path.join(kb, 'wiki', 'graph.json')
+  if (!fs.existsSync(gPath)) { console.error(`graph arm needs ${gPath} — run \`llm-wiki index\` first`); process.exit(1) }
+  graphData = readJsonFile(gPath)
+  if (!Array.isArray(graphData.edges) || graphData.edges.length === 0) {
+    console.error('graph arm: graph.json has no edges — this arm is meaningless on a linkless corpus'); process.exit(1)
+  }
+}
+
 const strip = (relPath) => relPath.replace(/\.md$/, '')
 const rows = []
 for (const p of retrievalProbes) {
@@ -65,6 +76,16 @@ for (const p of retrievalProbes) {
       const bm = retrievePages(kb, p.q, k)
       const vec = (qn ? cosineTopK(qn, store, k) : []).map(v => ({ relPath: v.id }))
       got = rrfFuse([{ source: 'bm25', hits: bm }, { source: 'vector', hits: vec }], k).map(h => strip(h.relPath))
+    } else if (arm === 'graph') {
+      const bm = retrievePages(kb, p.q, k)
+      const vec = (qn ? cosineTopK(qn, store, k) : []).map(v => ({ relPath: v.id }))
+      const candidates = [...new Map([...bm, ...vec].map(h => [h.relPath, h])).values()]
+      const deg = degreeRank(graphData, candidates.map(h => strip(h.relPath))).map(id => ({ relPath: `${id}.md` }))
+      got = rrfFuse([
+        { source: 'bm25', hits: bm },
+        { source: 'vector', hits: vec },
+        { source: 'graph', hits: deg },
+      ], k).map(h => strip(h.relPath))
     } else { console.error(`unknown arm: ${arm}`); process.exit(1) }
     const ms = performance.now() - t0
     rows.push({ arm, probe: p.q, lang: p.lang ?? '?', type: p.type ?? 'fact', recall: recallAtK(p.expect, got, k), mrr: mrr(p.expect, got), ms, got })
