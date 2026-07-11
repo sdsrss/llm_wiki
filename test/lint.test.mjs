@@ -265,6 +265,35 @@ test('promote-concepts ignores list items in user sections after Pending', async
   assert.ok(!promos.some(s => s.detail.includes('not-a-concept')), 'user-section item must not be treated as pending')
 })
 
+test('lint validates relations: entry shape, target existence, vocabulary, confidence', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/sources/a.md'),
+    `---\ntype: source\ntitle: A\ndescription: d\ntags: [x]\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nbody [[sources/b]]`)
+  fs.writeFileSync(path.join(d, 'wiki/sources/b.md'),
+    `---\ntype: source\ntitle: B\ndescription: d\ntags: [x]\ncreated: 2026-07-01\nupdated: 2026-07-01\nrelations:\n  - to: sources/a\n    type: uses\n  - to: concepts/ghost\n    type: uses\n  - to: sources/a\n    type: invests_in\n  - to: sources/a\n    type: uses\n    confidence: banana\n  - just-a-string\n---\n\nbody`)
+  const r = await lintKb(d)
+  const rules = r.mechanical.map(i => i.rule)
+  assert.ok(rules.includes('broken-relation-target'), 'ghost target reported')
+  assert.ok(rules.includes('unknown-relation-type'), 'invests_in not in default vocabulary')
+  assert.ok(rules.includes('invalid-relation-confidence'), 'banana confidence reported')
+  assert.ok(rules.includes('invalid-relation-entry'), 'string entry reported')
+  assert.ok(!r.mechanical.some(i => i.rule === 'unknown-relation-type' && i.detail.includes('"uses"')), 'in-vocabulary type not flagged')
+})
+
+test('relation targets count as incoming links for orphan detection', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/entities/lonely.md'),
+    `---\ntype: entity\ntitle: Lonely\ndescription: d\ntags: [x]\nsources: [raw/a.md]\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nno inbound wikilinks`)
+  fs.writeFileSync(path.join(d, 'wiki/sources/citing.md'),
+    `---\ntype: source\ntitle: Citing\ndescription: d\ntags: [x]\ncreated: 2026-07-01\nupdated: 2026-07-01\nrelations:\n  - to: entities/lonely\n    type: derived_from\n---\n\nbody`)
+  fs.writeFileSync(path.join(d, 'raw/a.md'), 'raw')
+  const r = await lintKb(d)
+  assert.ok(!r.mechanical.some(i => i.rule === 'orphan-page' && i.path === 'entities/lonely.md'),
+    'a page targeted by a typed relation is not an orphan')
+})
+
 test('lintKb stale-scan skips invalidated pages', async (t) => {
   const d = tmp(t)
   initKb(d)

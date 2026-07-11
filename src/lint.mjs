@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { loadKbConfig } from './templates.mjs'
-import { listWikiPages, validatePage, isInvalidated, PAGE_STATUSES } from './pages.mjs'
+import { listWikiPages, validatePage, isInvalidated, PAGE_STATUSES, RELATION_CONFIDENCES } from './pages.mjs'
 import { extractWikilinks, buildIndex } from './indexer.mjs'
 import { loadManifest } from './manifest.mjs'
 
@@ -35,6 +35,24 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
     }
     if (pg.data.superseded_by !== undefined && !ids.has(String(pg.data.superseded_by))) {
       mechanical.push({ rule: 'superseded-target-missing', path: pg.relPath, detail: `superseded_by -> ${pg.data.superseded_by}` })
+    }
+    if (pg.data.relations !== undefined && !Array.isArray(pg.data.relations)) {
+      mechanical.push({ rule: 'invalid-relation-entry', path: pg.relPath, detail: 'relations must be a YAML list' })
+    }
+    for (const rel of Array.isArray(pg.data.relations) ? pg.data.relations : []) {
+      if (!rel || typeof rel !== 'object' || !rel.to || !rel.type) {
+        mechanical.push({ rule: 'invalid-relation-entry', path: pg.relPath, detail: `expected {to, type[, confidence]}, got: ${JSON.stringify(rel)}` })
+        continue
+      }
+      const target = String(rel.to).replace(/\.md$/, '')
+      if (!ids.has(target)) mechanical.push({ rule: 'broken-relation-target', path: pg.relPath, detail: `-> ${target}` })
+      else incoming.set(target, (incoming.get(target) ?? 0) + 1)
+      if (!cfg.relationTypes.includes(String(rel.type))) {
+        mechanical.push({ rule: 'unknown-relation-type', path: pg.relPath, detail: `"${rel.type}" not in relationTypes (${cfg.relationTypes.join(', ')})` })
+      }
+      if (rel.confidence !== undefined && !RELATION_CONFIDENCES.includes(rel.confidence)) {
+        mechanical.push({ rule: 'invalid-relation-confidence', path: pg.relPath, detail: `"${rel.confidence}" (expected ${RELATION_CONFIDENCES.join(' | ')})` })
+      }
     }
   }
   for (const pg of pages) {
