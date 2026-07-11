@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.6.5 (2026-07-11)
+
+Three security/robustness fixes from a full architecture-and-security audit
+(M1, the release-blocking milestone). Suite 185 → 187.
+
+**Behavior change (opt-out available):** `scan` now refuses a **symlinked source
+file whose target resolves outside the source directory**, instead of silently
+reading it into `raw/` and into a publishable wiki page. An attacker-supplied
+corpus containing e.g. `notes.md -> ~/.llm-wiki/config.json` (or `~/.ssh/id_rsa`,
+`/dev/zero`) could otherwise exfiltrate the victim's API key into a shared KB or
+hang the process. Escaping links now appear in the scan report as
+`skipped (symlink escapes source dir)`. **To restore the old follow-anywhere
+behavior for a trusted, curated corpus, pass `--follow-symlinks`.** In-tree
+symlinks are unaffected.
+
+- **fix(scan): symlinked files escaping the source tree are refused** (audit
+  HIGH-1). `walk()` blocked symlinked *directories* (loop safety) but followed
+  symlinked *files* and read the link target; the content was copied into `raw/`
+  and `raw/_originals/`. `scan` now `realpath`-resolves each symlinked file and
+  skips any whose target is outside the source dir; `--follow-symlinks` opts back
+  in.
+- **fix(scan): a file-size cap** (audit MEDIUM-1). Reads were unbounded — a
+  multi-GB (or `/dev/zero`-symlinked) file could OOM/hang the process. Files over
+  `maxFileBytes` (new `wiki.config.json` key, default 50 MB) are now skipped with
+  a clear reason rather than read whole.
+- **fix(export): `--out` managed-layer guard is now a prefix check** (audit
+  MEDIUM-2). The guard rejected `--out <kb>/raw` and `--out <kb>/wiki` exactly
+  but let a *subdirectory* (`--out <kb>/raw/sub`) through, where the export's
+  re-run `rmSync` would then wipe part of the immutable `raw/` layer. It now
+  rejects the KB root and anything inside `raw/`/`wiki/` at any depth.
+
 ## 0.6.4 (2026-07-11)
 
 Six fixes from a full-pipeline self-test pass (as a real user across every

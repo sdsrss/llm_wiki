@@ -11,6 +11,7 @@ export const DEFAULT_CONFIG = {
   language: 'auto',
   linkStyle: 'wikilink',
   askTokenBudget: 32000,
+  maxFileBytes: 52428800,
   vectorEnabled: false,
   relationTypes: ['implements', 'uses', 'depends_on', 'part_of', 'instance_of', 'derived_from', 'contrasts_with', 'causes'],
 }

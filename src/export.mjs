@@ -60,9 +60,16 @@ export function exportMarkdownPages(kbRoot, { out } = {}) {
   const p = kbPaths(kbRoot)
   const outDir = path.resolve(out ?? path.join(kbRoot, 'wiki-md'))
   // Never let --out resolve onto a managed KB layer: the marker guard below would
-  // later rmSync it, wiping the immutable raw/ inputs or the wiki/ pages themselves.
-  const forbidden = [path.resolve(kbRoot), path.resolve(kbRoot, 'raw'), path.resolve(p.wiki)]
-  if (forbidden.includes(outDir)) {
+  // later rmSync it, wiping the immutable raw/ inputs or the wiki/ pages. Prefix
+  // (not exact) match — `--out <kb>/raw/sub` is inside raw/ and just as destructive
+  // (audit MEDIUM-2). The KB root itself is rejected too.
+  const rawDir = path.resolve(kbRoot, 'raw')
+  const wikiDir = path.resolve(p.wiki)
+  const within = (parent, child) => {
+    const rel = path.relative(parent, child)
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+  }
+  if (outDir === path.resolve(kbRoot) || within(rawDir, outDir) || within(wikiDir, outDir)) {
     throw new Error(`refusing to export into the KB's managed layers (${path.relative(kbRoot, outDir) || '.'}) — pass a dedicated --out directory`)
   }
   if (fs.existsSync(outDir) && !fs.statSync(outDir).isDirectory()) {

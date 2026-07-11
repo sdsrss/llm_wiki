@@ -52,7 +52,7 @@ test('scanSource: friendly error for a missing dir or a non-directory path', asy
   await assert.rejects(() => scanSource(f, kb, {}), /source path is not a directory:/)
 })
 
-test('scanSource: symlinked dirs are reported as skipped, symlinked files still scanned', async (t) => {
+test('scanSource: symlinked dirs and escaping/broken file links are all reported as skipped', async (t) => {
   const src = tmp(t), kb = tmp(t), outside = tmp(t)
   initKb(kb)
   fs.writeFileSync(path.join(outside, 'in-linked-dir.md'), '# Hidden\nbody')
@@ -64,8 +64,49 @@ test('scanSource: symlinked dirs are reported as skipped, symlinked files still 
   const r = await scanSource(src, kb, {})
   assert.ok(r.skipped.some(s => s.rel === 'linked-dir' && s.reason.includes('symlinked directory')), 'dir symlink surfaces in skipped instead of vanishing')
   assert.ok(r.skipped.some(s => s.rel === 'dangling.md' && s.reason === 'broken symlink'))
-  assert.ok(r.files.some(f => f.rel === 'linked-file.md'), 'file symlink is followed as before')
+  assert.ok(r.skipped.some(s => s.rel === 'linked-file.md' && s.reason === 'symlink escapes source dir'), 'file symlink pointing outside the tree is refused (HIGH-1)')
+  assert.ok(!r.files.some(f => f.rel === 'linked-file.md'), 'escaping file symlink not scanned')
   assert.ok(!r.files.some(f => f.rel.includes('in-linked-dir')), 'linked dir contents not walked')
+})
+
+// HIGH-1 (audit v0.6.4): a symlinked file resolving OUTSIDE the source tree used
+// to be read and copied into raw/ — an attacker-supplied corpus could exfiltrate
+// ~/.llm-wiki/config.json (API key) or ~/.ssh/id_rsa into a publishable KB.
+// It must now be skipped; an in-tree symlink is still followed; --follow-symlinks
+// opts back into the old behavior.
+test('scanSource: symlinked file escaping the source tree is refused (HIGH-1 exfiltration guard)', async (t) => {
+  const src = tmp(t), kb = tmp(t), secretDir = tmp(t)
+  initKb(kb)
+  const secret = path.join(secretDir, 'config.json')
+  fs.writeFileSync(secret, '{"apiKey":"sk-SECRET-should-never-be-ingested"}')
+  fs.writeFileSync(path.join(src, 'real.md'), '# Real\nlegit body')
+  fs.symlinkSync(path.join(src, 'real.md'), path.join(src, 'alias.md')) // in-tree symlink: allowed
+  fs.symlinkSync(secret, path.join(src, 'notes.md'))                    // escapes tree: refused
+
+  const r = await scanSource(src, kb, {})
+  assert.ok(!r.files.some(f => f.rel === 'notes.md'), 'escaping symlink is NOT scanned')
+  assert.ok(r.skipped.some(s => s.rel === 'notes.md' && s.reason === 'symlink escapes source dir'),
+    'escaping symlink surfaces in skipped with a clear reason')
+  assert.ok(r.files.some(f => f.rel === 'alias.md'), 'in-tree symlink is still followed')
+  const planText = JSON.stringify(r)
+  assert.ok(!planText.includes('sk-SECRET'), 'secret content never enters the scan report')
+
+  const r2 = await scanSource(src, kb, { followSymlinks: true })
+  assert.ok(r2.files.some(f => f.rel === 'notes.md'), '--follow-symlinks opts back into following escaping links')
+})
+
+// MEDIUM-1 (audit v0.6.4): unbounded reads OOM on a hostile large file. The cap is
+// configurable via wiki.config.json; oversize files are skipped, not fatal.
+test('scanSource: file over maxFileBytes is skipped with a clear reason', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  fs.writeFileSync(path.join(kb, 'wiki.config.json'), JSON.stringify({ maxFileBytes: 100 }))
+  fs.writeFileSync(path.join(src, 'small.md'), '# ok\nshort')
+  fs.writeFileSync(path.join(src, 'big.md'), '# big\n' + 'x'.repeat(500))
+  const r = await scanSource(src, kb, {})
+  assert.ok(r.files.some(f => f.rel === 'small.md'), 'under-cap file scanned')
+  assert.ok(!r.files.some(f => f.rel === 'big.md'), 'over-cap file not scanned')
+  assert.ok(r.skipped.some(s => s.rel === 'big.md' && /too large/.test(s.reason)), 'over-cap file surfaces in skipped')
 })
 
 test('scanSource --exclude skips matching paths with reason "excluded"', async (t) => {

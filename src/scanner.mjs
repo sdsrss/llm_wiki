@@ -51,38 +51,52 @@ export function estimateTokens(text) {
 
 // Symlinked directories are not followed (loop safety) but are recorded in
 // `skippedDirs` so they surface in the scan report instead of vanishing silently.
-// Symlinked files keep working: reads below follow the link as before.
-function* walk(dir, base = dir, skippedDirs = [], exclude = []) {
+// Symlinked files are followed ONLY when their target resolves inside the source
+// tree (`opts.rootReal`). A link escaping the tree would pull an arbitrary readable
+// file (e.g. ~/.llm-wiki/config.json, ~/.ssh/id_rsa, /dev/zero) into raw/ and into a
+// publishable page — the HIGH-1 exfiltration/DoS vector. `opts.followSymlinks` opts
+// back into follow-anywhere for a trusted, curated corpus.
+function* walk(dir, base, skippedDirs, exclude, opts) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     if (e.name.startsWith('.') || e.name === 'node_modules') continue
     const abs = path.join(dir, e.name)
     if (e.isSymbolicLink()) {
       const rel = path.relative(base, abs)
       if (exclude.some(pat => rel.includes(pat))) { skippedDirs.push({ rel, reason: 'excluded' }); continue }
-      let st
-      try { st = fs.statSync(abs) } catch { skippedDirs.push({ rel, reason: 'broken symlink' }); continue }
+      let st, real
+      try { st = fs.statSync(abs); real = fs.realpathSync(abs) } catch { skippedDirs.push({ rel, reason: 'broken symlink' }); continue }
       if (st.isDirectory()) { skippedDirs.push({ rel, reason: 'symlinked directory (not followed)' }); continue }
+      if (!opts.followSymlinks) {
+        const relToRoot = path.relative(opts.rootReal, real)
+        if (relToRoot.startsWith('..') || path.isAbsolute(relToRoot)) {
+          skippedDirs.push({ rel, reason: 'symlink escapes source dir' }); continue
+        }
+      }
       yield rel
-    } else if (e.isDirectory()) yield* walk(abs, base, skippedDirs, exclude)
+    } else if (e.isDirectory()) yield* walk(abs, base, skippedDirs, exclude, opts)
     else yield path.relative(base, abs)
   }
 }
 
 // `persist: false` runs a read-only scan (e.g. for `status`) that does not
 // overwrite the .scan-plan.json a previous explicit `scan` produced.
-export async function scanSource(srcDir, kbRoot, { exclude = [], persist = true } = {}) {
+export async function scanSource(srcDir, kbRoot, { exclude = [], persist = true, followSymlinks = false } = {}) {
   const st = fs.statSync(srcDir, { throwIfNoEntry: false })
   if (!st) throw new Error(`source directory not found: ${srcDir}`)
   if (!st.isDirectory()) throw new Error(`source path is not a directory: ${srcDir}`)
   const cfg = loadKbConfig(kbRoot)
   const files = []
   const skipped = []
-  for (const rel of walk(srcDir, srcDir, skipped, exclude)) {
+  const rootReal = fs.realpathSync(srcDir)
+  for (const rel of walk(srcDir, srcDir, skipped, exclude, { followSymlinks, rootReal })) {
     if (exclude.some(pat => rel.includes(pat))) { skipped.push({ rel, reason: 'excluded' }); continue }
     const ext = path.extname(rel).toLowerCase()
     if (!SUPPORTED_EXTS.includes(ext)) { skipped.push({ rel, reason: `unsupported ${ext}` }); continue }
     const abs = path.join(srcDir, rel)
     const bytes = fs.statSync(abs).size
+    // Size cap (audit MEDIUM-1): an unbounded read OOMs on a hostile multi-GB file;
+    // gate before sha256File/readFileSync below, which both read the whole file.
+    if (bytes > cfg.maxFileBytes) { skipped.push({ rel, reason: `too large (${bytes} bytes > ${cfg.maxFileBytes} cap)` }); continue }
     const entry = { rel, ext, bytes, hash: sha256File(abs), lang: 'unknown', tokens: 0 }
     if (TEXT_EXTS.includes(ext)) {
       const text = fs.readFileSync(abs, 'utf8')

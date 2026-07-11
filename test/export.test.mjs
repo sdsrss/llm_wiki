@@ -170,6 +170,12 @@ test('exportMarkdownPages refuses --out pointing at the KB root or managed layer
   assert.throws(() => exportMarkdownPages(d, { out: path.join(d, 'raw') }), /managed layers/, 'refuses the immutable raw/ layer')
   assert.throws(() => exportMarkdownPages(d, { out: path.join(d, 'wiki') }), /managed layers/, 'refuses the wiki/ layer')
   assert.throws(() => exportMarkdownPages(d, { out: d }), /managed layers/, 'refuses the KB root itself')
+  // MEDIUM-2: a SUBDIRECTORY of a managed layer is just as destructive (re-export rmSyncs it)
+  assert.throws(() => exportMarkdownPages(d, { out: path.join(d, 'raw/nested') }), /managed layers/, 'refuses a subdir of raw/')
+  assert.throws(() => exportMarkdownPages(d, { out: path.join(d, 'wiki/sources/sub') }), /managed layers/, 'refuses a subdir of wiki/')
+  // a sibling dir outside the managed layers is still allowed
+  const r = exportMarkdownPages(d, { out: path.join(d, 'export-out') })
+  assert.ok(fs.existsSync(path.join(r.out, '.llm-wiki-export')), 'a non-managed --out still works')
   // raw/ untouched — no marker leaked into it
   assert.ok(!fs.existsSync(path.join(d, 'raw/.llm-wiki-export')), 'no export marker leaked into raw/')
 })
