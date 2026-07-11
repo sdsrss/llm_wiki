@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.2 (2026-07-11)
+
+No breaking changes, no KB migration, no default-behavior change — one additive
+export format.
+
+- feat(export): `--format canvas` writes a JSON Canvas 1.0 file
+  (`<kb>/graph.canvas`) — a domain map of `file` cards laid out in columns by
+  page type (source / entity / concept / comparison / raw), ordered by link
+  degree, colored by type, with invalidated pages flagged red. The cards open
+  as live, clickable notes in Obsidian Canvas when the KB is opened as its own
+  vault. Zero-LLM, alongside the existing graphml / cypher / html / markdown
+  exports. Suite 174 → 178.
+
 ## 0.6.1 (2026-07-11)
 
 No breaking changes, no KB migration, no default-behavior change: the only
