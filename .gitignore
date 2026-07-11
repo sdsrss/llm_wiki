@@ -11,3 +11,4 @@ kb/
 .lint-report.json
 .scan-plan.json
 scripts/eval/results/
+scripts/eval/corpus/

@@ -1,0 +1,12 @@
+{"q":"Which npm module creates HTTP errors for frameworks like Express, Koa, and Connect?","expect":["concepts/http-errors-readme"],"lang":"en","type":"fact"}
+{"q":"Which tiny module wraps a callback so that it can only ever be invoked one time?","expect":["concepts/once-readme"],"lang":"en","type":"fact"}
+{"q":"Which module is a ponyfill for Node.js 0.12's path.isAbsolute() function?","expect":["concepts/path-is-absolute-readme"],"lang":"en","type":"fact"}
+{"q":"Which module parses the HTTP X-Forwarded-For header to extract client addresses?","expect":["concepts/forwarded-readme"],"lang":"en","type":"fact"}
+{"q":"Which Express middleware limits repeated requests using a windowMs option and per-IP limit?","expect":["concepts/express-rate-limit-readme"],"lang":"en","type":"fact"}
+{"q":"In undici, what stable error code string identifies a connect-timeout failure?","expect":["concepts/undici-docs-docs-api-errors"],"lang":"en","type":"fact"}
+{"q":"Which library converts .docx documents such as Word files into clean semantic HTML?","expect":["concepts/mammoth-readme"],"lang":"en","type":"fact"}
+{"q":"哪个模块会在首次 require 时获取并稳健地缓存所有 JS 语言级内建对象（intrinsics）？","expect":["concepts/get-intrinsic-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库负责解析 HTTP 的 Accept、Accept-Charset、Accept-Encoding 等内容协商请求头？","expect":["concepts/negotiator-history"],"lang":"zh-x","type":"xlang"}
+{"q":"cookie-signature 从哪个版本开始改用内置的 crypto.timingSafeEqual 来做校验？","expect":["concepts/cookie-signature-history"],"lang":"zh-x","type":"xlang"}
+{"q":"How do I define a GraphQL schema with resolvers and run a query against it?","expect":[],"lang":"en","type":"none"}
+{"q":"How does PyTorch compute gradients using autograd on tensors during backpropagation?","expect":[],"lang":"en","type":"none"}
