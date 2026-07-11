@@ -7,7 +7,14 @@ import { initKb } from '../src/init.mjs'
 import { loadLlmConfig } from '../src/llm-config.mjs'
 import { embedTexts, embedKb } from '../src/embed.mjs'
 import { loadVectorStore, pageEmbedText } from '../src/vector.mjs'
-import { estimateTokens } from '../src/scanner.mjs'
+
+// Recompute embed.mjs's worst-case cap formula inline (import nothing new across
+// modules): CJK char = 1 token, everything else = 0.5 token (pessimistic BPE).
+function worstCaseEmbedTokens(text) {
+  let cjk = 0
+  for (const ch of text) if (/[　-鿿豈-﫿]/.test(ch)) cjk++
+  return cjk + (text.length - cjk) / 2
+}
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-emb-'))
@@ -120,8 +127,8 @@ test('embedKb caps embed input at ~8000 tokens for oversized pages without touch
 
   const bigFile = path.join(d, 'wiki/sources/big.md')
   const before = fs.readFileSync(bigFile)
-  // Sanity: the page as-authored really does exceed the cap.
-  assert.ok(estimateTokens(pageEmbedText({ data: { title: 'Big', description: 'desc Big', tags: ['x'] }, body: bigBody })) > 8000)
+  // Sanity: the page as-authored really does exceed the worst-case cap.
+  assert.ok(worstCaseEmbedTokens(pageEmbedText({ data: { title: 'Big', description: 'desc Big', tags: ['x'] }, body: bigBody })) > 8000)
 
   const stderr = []
   const origWrite = process.stderr.write.bind(process.stderr)
@@ -131,10 +138,10 @@ test('embedKb caps embed input at ~8000 tokens for oversized pages without touch
   const f = fakeEmbed(() => [1, 0])
   const r = await embedKb(d, { fetchImpl: f.fetchImpl })
 
-  // (a) every string actually sent to the API is within the cap
+  // (a) every string actually sent to the API is within the worst-case cap
   for (const call of f.calls)
     for (const input of call.body.input)
-      assert.ok(estimateTokens(input) <= 8000, `sent input over cap: ${estimateTokens(input)}`)
+      assert.ok(worstCaseEmbedTokens(input) <= 8000, `sent input over cap: ${worstCaseEmbedTokens(input)}`)
   // (b) the oversized page still gets a vector in the store, counted as embedded
   assert.equal(r.embedded, 2)
   assert.ok(loadVectorStore(d).pages['sources/big.md'])
