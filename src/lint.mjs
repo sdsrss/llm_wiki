@@ -39,6 +39,7 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
     if (pg.data.relations !== undefined && !Array.isArray(pg.data.relations)) {
       mechanical.push({ rule: 'invalid-relation-entry', path: pg.relPath, detail: 'relations must be a YAML list' })
     }
+    const relationTypes = Array.isArray(cfg.relationTypes) ? cfg.relationTypes : []
     for (const rel of Array.isArray(pg.data.relations) ? pg.data.relations : []) {
       if (!rel || typeof rel !== 'object' || !rel.to || !rel.type) {
         mechanical.push({ rule: 'invalid-relation-entry', path: pg.relPath, detail: `expected {to, type[, confidence]}, got: ${JSON.stringify(rel)}` })
@@ -47,8 +48,8 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
       const target = String(rel.to).replace(/\.md$/, '')
       if (!ids.has(target)) mechanical.push({ rule: 'broken-relation-target', path: pg.relPath, detail: `-> ${target}` })
       else incoming.set(target, (incoming.get(target) ?? 0) + 1)
-      if (!cfg.relationTypes.includes(String(rel.type))) {
-        mechanical.push({ rule: 'unknown-relation-type', path: pg.relPath, detail: `"${rel.type}" not in relationTypes (${cfg.relationTypes.join(', ')})` })
+      if (!relationTypes.includes(String(rel.type))) {
+        mechanical.push({ rule: 'unknown-relation-type', path: pg.relPath, detail: `"${rel.type}" not in relationTypes (${relationTypes.join(', ')})` })
       }
       if (rel.confidence !== undefined && !RELATION_CONFIDENCES.includes(rel.confidence)) {
         mechanical.push({ rule: 'invalid-relation-confidence', path: pg.relPath, detail: `"${rel.confidence}" (expected ${RELATION_CONFIDENCES.join(' | ')})` })

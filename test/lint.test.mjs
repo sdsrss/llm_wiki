@@ -294,6 +294,19 @@ test('relation targets count as incoming links for orphan detection', async (t) 
     'a page targeted by a typed relation is not an orphan')
 })
 
+test('lint tolerates a non-array relationTypes config override', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), '{"relationTypes": 5}')
+  fs.writeFileSync(path.join(d, 'wiki/sources/a.md'),
+    `---\ntype: source\ntitle: A\ndescription: d\ntags: [x]\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nbody`)
+  fs.writeFileSync(path.join(d, 'wiki/sources/b.md'),
+    `---\ntype: source\ntitle: B\ndescription: d\ntags: [x]\ncreated: 2026-07-01\nupdated: 2026-07-01\nrelations:\n  - to: sources/a\n    type: uses\n---\n\nbody`)
+  const r = await lintKb(d)
+  assert.ok(r.mechanical.some(i => i.rule === 'unknown-relation-type' && i.path === 'sources/b.md'),
+    'a non-array vocabulary reports every type as unknown instead of crashing')
+})
+
 test('lintKb stale-scan skips invalidated pages', async (t) => {
   const d = tmp(t)
   initKb(d)
