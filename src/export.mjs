@@ -9,7 +9,7 @@ const xmlEscape = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 
-const cyEscape = (s) => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+const cyEscape = (s) => String(s).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/'/g, "\\'")
 
 // graph.json only lists wiki pages as nodes, but source-type edges point at raw/
 // paths. Exports need every edge endpoint to exist, so synthesize raw nodes.

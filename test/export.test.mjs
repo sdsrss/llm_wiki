@@ -106,6 +106,14 @@ test('exports carry edge confidence: GraphML d4 key, Cypher relationship propert
   assert.ok(cy.includes('MERGE (a)-[r:WIKILINK]->(b);'), 'no SET clause without confidence')
 })
 
+// R17 / audit LOW-2: newlines in a node title must not split a single-quoted Cypher
+// string across lines (line-based .cypher consumers would choke).
+test('toCypher escapes newlines in titles', () => {
+  const cy = toCypher({ nodes: [{ id: 'a', type: 'entity', title: 'line1\nline2\rline3' }], edges: [] })
+  assert.ok(cy.includes("n.title = 'line1\\nline2\\rline3'"), 'newlines escaped to \\n / \\r')
+  assert.equal(cy.split('\n').filter(l => l.includes('MERGE (n:Entity')).length, 1, 'statement stays on one line')
+})
+
 test('wikilinksToMarkdown converts plain, aliased, anchored and .md-suffixed links relative to fromDir', () => {
   const body = 'see [[entities/thing]] and [[entities/thing|The Thing]] and [[concepts/idea#h2]] and [[sources/doc.md]] and [[raw/doc.md]]'
   const out = wikilinksToMarkdown(body, 'sources')

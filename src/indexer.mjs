@@ -17,6 +17,11 @@ export function extractWikilinks(body) {
 
 const SECTION_TITLES = { source: 'Sources', entity: 'Entities', concept: 'Concepts', comparison: 'Comparisons', other: 'Other' }
 
+// Frontmatter title/description are interpolated raw into line-based markdown
+// (index.md, llms.txt). A value with newlines would inject extra lines, fake
+// headings or spoof wikilinks (audit LOW-1). Collapse any newline run to a space.
+const inline = (s) => String(s ?? '').replace(/[\r\n]+/g, ' ')
+
 export function buildIndex(kbRoot) {
   const p = kbPaths(kbRoot)
   const cfg = loadKbConfig(kbRoot)
@@ -42,7 +47,7 @@ export function buildIndex(kbRoot) {
   const byType = { source: [], entity: [], concept: [], comparison: [], other: [] }
   for (const pg of pages) (byType[pg.data.type] ?? byType.other).push(pg)
   const line = (pg) => {
-    const base = `- [[${pg.relPath.replace(/\.md$/, '')}]] — ${pg.data.description ?? ''}`
+    const base = `- [[${pg.relPath.replace(/\.md$/, '')}]] — ${inline(pg.data.description)}`
     if (!isInvalidated(pg)) return base
     return pg.data.superseded_by
       ? `${base} ⚠ invalidated, superseded by [[${pg.data.superseded_by}]]`
@@ -101,7 +106,7 @@ export function buildIndex(kbRoot) {
 
   const kbName = path.basename(path.resolve(kbRoot))
   const llms = [`# ${kbName}`, '', `> llm_wiki knowledge base. Read wiki/index.md first, then open full pages.`, '', '## Pages',
-    ...pages.filter(pg => !isInvalidated(pg)).map(pg => `- [${pg.data.title}](wiki/${pg.relPath}): ${pg.data.description ?? ''}`)].join('\n') + '\n'
+    ...pages.filter(pg => !isInvalidated(pg)).map(pg => `- [${inline(pg.data.title)}](wiki/${pg.relPath}): ${inline(pg.data.description)}`)].join('\n') + '\n'
   fs.writeFileSync(p.llmsTxt, llms)
 
   return { pageCount: pages.length, topicsSplit }

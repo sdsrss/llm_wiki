@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { DEFAULT_CONFIG, agentsMdTemplate, loadKbConfig } from '../src/templates.mjs'
+import { DEFAULT_CONFIG, agentsMdTemplate, readmeTemplate, loadKbConfig } from '../src/templates.mjs'
 import { kbPaths } from '../src/paths.mjs'
 
 test('DEFAULT_CONFIG has all spec keys with defaults', () => {
@@ -14,8 +14,17 @@ test('DEFAULT_CONFIG has all spec keys with defaults', () => {
   assert.equal(DEFAULT_CONFIG.indexSplitAt, 200)
   assert.equal(DEFAULT_CONFIG.language, 'auto')
   assert.equal(DEFAULT_CONFIG.linkStyle, 'wikilink')
+  assert.equal(DEFAULT_CONFIG.maxFileBytes, 52428800)
   assert.ok(!('rawDir' in DEFAULT_CONFIG) && !('schemaFile' in DEFAULT_CONFIG),
     'unwired pseudo-config keys removed — raw/ and AGENTS.md are fixed layout')
+})
+
+// R9 (audit): the generated per-KB README must pin @0 like every other doc path,
+// so a future 1.x can't silently change the installed behavior users npx into.
+test('readmeTemplate pins the npx command to @0', () => {
+  const readme = readmeTemplate('my-kb')
+  assert.match(readme, /npx @sdsrs\/llm-wiki@0 ask/, 'ask command carries the @0 pin')
+  assert.ok(!/npx @sdsrs\/llm-wiki ask/.test(readme), 'no unpinned npx command')
 })
 
 test('loadKbConfig merges defaults and names the file on corrupt JSON', (t) => {

@@ -41,3 +41,10 @@ test('bin: llm-wiki init <dir> works end to end', (t) => {
   assert.match(out, /created/i)
   assert.ok(fs.existsSync(path.join(d, 'kb', 'wiki', 'index.md')))
 })
+
+// R15 (audit): a published CLI must report its own version.
+test('bin: llm-wiki --version prints the package version', () => {
+  const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  const out = execFileSync('node', [BIN, '--version'], { encoding: 'utf8' })
+  assert.equal(out.trim(), pkg.version)
+})

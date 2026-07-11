@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { program } from 'commander'
@@ -15,7 +16,9 @@ import { exportGraph, loadGraph, exportMarkdownPages } from '../src/export.mjs'
 import { shortestPath, neighborhood, hubs } from '../src/graph.mjs'
 import { runMcpServer } from '../src/mcp.mjs'
 
-program.name('llm-wiki').description('Compile messy directories into an llm_wiki knowledge base')
+const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+
+program.name('llm-wiki').description('Compile messy directories into an llm_wiki knowledge base').version(pkg.version)
 
 program.command('init [dir]').description('scaffold a knowledge base').action((dir = '.') => {
   const { created, skipped } = initKb(dir)

@@ -65,8 +65,9 @@ npx @sdsrs/llm-wiki@0 ask "what did we decide about X?"
   (28 probes), enabling vectors lifted Recall@5 from 0.73 to 0.97 — the gap
   was almost entirely cross-language queries.
 - **A real link graph, queried without an LLM** — `graph path | neighbors |
-  hubs` traverse wikilinks and typed relations (`implements`, `supersedes`, …)
-  instantly.
+  hubs` traverse wikilinks and typed relations (`implements`, `contrasts_with`,
+  … — the `relationTypes` vocabulary; `superseded_by` is a separate structural
+  edge the CLI derives from frontmatter, not a `relations:` type) instantly.
 - **Agent-native, tool-agnostic** — the same KB serves a standalone CLI,
   Claude Code / Codex skills, an MCP server (Cursor, Windsurf, …), and opens
   directly as an Obsidian vault.

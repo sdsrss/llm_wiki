@@ -39,6 +39,22 @@ test('buildIndex writes index.md preserving pending, graph.json, llms.txt', (t) 
   assert.match(fs.readFileSync(path.join(d, 'llms.txt'), 'utf8'), /wiki\/sources\/art\.md/)
 })
 
+// R16 / audit LOW-1: a frontmatter description/title with newlines must not inject
+// extra lines, fake headings or spoofed wikilinks into index.md / llms.txt.
+test('buildIndex collapses newlines in title/description (no line injection)', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/entities/evil.md'),
+    `---\ntype: entity\ntitle: "Evil\\n## Fake Heading"\ndescription: "clean\\n- [[spoof/page]]\\n## Injected"\ntags: [t]\nsources: [raw/a.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nbody\n`)
+  buildIndex(d)
+  const idx = fs.readFileSync(path.join(d, 'wiki/index.md'), 'utf8')
+  const llms = fs.readFileSync(path.join(d, 'llms.txt'), 'utf8')
+  assert.ok(!/^## Injected/m.test(idx), 'no injected heading in index.md')
+  assert.ok(!/^- \[\[spoof\/page\]\]/m.test(idx), 'no spoofed wikilink line in index.md')
+  assert.ok(!/^## Fake Heading/m.test(llms), 'no injected heading in llms.txt')
+  assert.match(idx, /\[\[entities\/evil\]\] — clean - \[\[spoof\/page\]\] ## Injected/, 'newlines collapsed to spaces on one line')
+})
+
 test('buildIndex bounds the pending section and preserves user sections after it', (t) => {
   const d = tmp(t)
   initKb(d)

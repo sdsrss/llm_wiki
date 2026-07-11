@@ -5,12 +5,19 @@ import { readJsonFile } from './json.mjs'
 export function loadManifest(kbRoot) {
   const p = kbPaths(kbRoot)
   if (!fs.existsSync(p.manifest)) return { files: {} }
-  return readJsonFile(p.manifest)
+  const m = readJsonFile(p.manifest)
+  // Shape guard: a hand-edited or half-written manifest lacking `files` (or with a
+  // non-object there) would make diffManifest's `Object.keys(manifest.files)` throw.
+  return (m && typeof m.files === 'object' && m.files !== null && !Array.isArray(m.files)) ? m : { files: {} }
 }
 
 export function saveManifest(kbRoot, manifest) {
   const p = kbPaths(kbRoot)
-  fs.writeFileSync(p.manifest, JSON.stringify(manifest, null, 2) + '\n')
+  // Atomic write: manifest is non-derived state (hash->raw map). A crash mid-write
+  // must not leave a truncated/corrupt file. Write a temp sibling, then rename.
+  const tmp = `${p.manifest}.tmp`
+  fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2) + '\n')
+  fs.renameSync(tmp, p.manifest)
 }
 
 export function diffManifest(manifest, entries) {
