@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.0 (2026-07-11)
+
+No breaking changes, no KB migration, defaults unchanged. One behavior fix you
+may notice: `embed` no longer aborts the whole run when a page exceeds the
+embedding model's input limit — the text sent to the API is capped (~8000
+worst-case tokens, with a per-page stderr warning); the page file itself is
+never modified. Pin `@sdsrs/llm-wiki@0.4.1` to keep the previous (aborting)
+behavior.
+
+- feat(ask): `locatePages`/`askKb` accept `retrieval: 'auto' | 'bm25' | 'hybrid'`
+  (`auto` = existing behavior exactly; `bm25` forces lexical-only; `hybrid`
+  forces fusion and errors when vector prerequisites are missing instead of
+  degrading). Programmatic surface only — CLI behavior unchanged. `chatCompletion`
+  is now an exported helper.
+- fix(embed): oversized pages embed their head instead of killing the run —
+  input capped at ~8000 worst-case tokens (binary-search cut, lone-surrogate
+  trim at the boundary), per-page warning, incremental reuse unaffected for
+  pages under the cap.
+- Eval harness completed (dev, in-repo `scripts/eval/`): four probe classes
+  (fact / multihop / xlang / none), answer-level eval (abstention honesty +
+  3-dimension LLM-as-judge head-to-head with position-swap debiasing),
+  50/150-page scale corpora generated from local markdown (zero network),
+  experimental graph-degree RRF arm (measured negative on ./kb — recorded in
+  `scripts/eval/README.md`, not promoted to `ask`), and `run-all.mjs`
+  producing a single markdown report.
+- Measured 2026-07-11 (./kb 35pp + tiers, k=5): abstention on unanswerable
+  probes 100% for both bm25 and hybrid (n=4, zero fabrication); answer-level
+  head-to-head hybrid vs bm25 (n=24, judge gpt-5.1) — correctness 7-1-16,
+  citations 11-3-10, completeness 7-3-14 (wins-losses-ties); retrieval
+  Recall@5 bm25→hybrid: 35pp .688→.979, 50pp .600→1.000, 150pp .667→1.000
+  (no BM25-favored regime found in the 35–150 range).
+
 ## 0.4.1 (2026-07-11)
 
 Patch: all fixes, no new features, no deps, no KB migration. Defaults unchanged.
