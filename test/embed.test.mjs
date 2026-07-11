@@ -62,6 +62,21 @@ test('loadLlmConfig carries embeddingModel through flat and provider forms', (t)
   assert.equal(loadLlmConfig(d).embeddingModel, 'emb-1')
 })
 
+// R20 (audit): LLM_WIKI_API_KEY set on its own (no provider key) should bootstrap the
+// first builtin provider instead of returning null ("No LLM configured").
+test('loadLlmConfig bootstraps from LLM_WIKI_API_KEY alone', (t) => {
+  const d = tmp(t)
+  setCfg(t, d) // empty config dir, OPENAI/OPENROUTER cleared
+  const saved = process.env.LLM_WIKI_API_KEY
+  process.env.LLM_WIKI_API_KEY = 'sk-bootstrap'
+  t.after(() => { if (saved === undefined) delete process.env.LLM_WIKI_API_KEY; else process.env.LLM_WIKI_API_KEY = saved })
+  const cfg = loadLlmConfig(d)
+  assert.ok(cfg, 'the env key alone yields a usable config')
+  assert.equal(cfg.apiKey, 'sk-bootstrap')
+  assert.equal(cfg.baseURL, 'https://api.openai.com/v1', 'defaults to the first builtin provider')
+  assert.equal(cfg.model, 'gpt-4o-mini')
+})
+
 test('embedTexts posts to /embeddings and restores order by index field', async () => {
   let captured
   const fetchImpl = async (url, opts) => {

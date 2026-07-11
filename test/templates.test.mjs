@@ -27,6 +27,12 @@ test('readmeTemplate pins the npx command to @0', () => {
   assert.ok(!/npx @sdsrs\/llm-wiki ask/.test(readme), 'no unpinned npx command')
 })
 
+// R11 (audit): hot.md is scaffolded and read by wiki-query, so the AGENTS.md contract
+// must tell a contract-only agent to maintain it during ingest.
+test('agentsMdTemplate documents hot.md in the ingest contract', () => {
+  assert.match(agentsMdTemplate(DEFAULT_CONFIG), /hot\.md/, 'contract names hot.md maintenance')
+})
+
 test('loadKbConfig merges defaults and names the file on corrupt JSON', (t) => {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
   t.after(() => fs.rmSync(d, { recursive: true, force: true }))

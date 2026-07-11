@@ -14,10 +14,19 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    # windows-latest is a non-blocking signal for now (R22): the suite has never run
+    # on Windows and the manifest/scan-plan keys use platform path separators. Gather
+    # the result without failing the required check; promote to required once green.
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         node: ['22', '24']
+        include:
+          - os: windows-latest
+            node: '22'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

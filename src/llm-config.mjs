@@ -52,6 +52,15 @@ export function loadLlmConfig(kbRoot) {
     }
   }
   if (cfg && process.env.LLM_WIKI_API_KEY) cfg.apiKey = process.env.LLM_WIKI_API_KEY
+  // Bootstrap: LLM_WIKI_API_KEY set but no provider apiKeyEnv is — use it as the key
+  // for the first configured (or builtin) provider, so the single env var is a
+  // complete config on its own instead of erroring "No LLM configured".
+  else if (!cfg && process.env.LLM_WIKI_API_KEY) {
+    const src = fileCfg.providers ? fileCfg : BUILTIN
+    const name = (src.priority ?? Object.keys(src.providers ?? {}))[0]
+    const prov = src.providers?.[name]
+    if (prov) cfg = { baseURL: prov.baseURL, apiKey: process.env.LLM_WIKI_API_KEY, model: prov.model, ...(prov.embeddingModel ? { embeddingModel: prov.embeddingModel } : {}) }
+  }
   if (!cfg || !cfg.baseURL || !cfg.apiKey || !cfg.model) return null
   return cfg
 }

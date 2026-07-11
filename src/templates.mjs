@@ -89,7 +89,9 @@ invalidation for whole pages.
 ## Operations
 - ingest: O(1) per document. Create the source page, create/update directly mentioned
   entity pages, queue concepts to Pending, append one line to wiki/log.md
-  (\`## [YYYY-MM-DD] ingest | <one line>\`). Batch size max ${cfg.batchSize}.
+  (\`## [YYYY-MM-DD] ingest | <one line>\`), and refresh wiki/hot.md — a ~500-char
+  snapshot of what the KB now covers (overwrite, don't append; it is the fast
+  orientation any reader/query loads first). Batch size max ${cfg.batchSize}.
   FORBIDDEN during ingest: auto-synthesis, auto contradiction scan, backlink maintenance,
   cascading edits deeper than ${cfg.cascadeDepth} pages.
 - query: read wiki/index.md first, open full pages (never fragments), follow wikilinks,
