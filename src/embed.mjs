@@ -1,9 +1,29 @@
 import { listWikiPages, isInvalidated } from './pages.mjs'
 import { loadLlmConfig, makeTransport } from './llm-config.mjs'
 import { sha256Text } from './hashing.mjs'
+import { estimateTokens } from './scanner.mjs'
 import { normalize, pageEmbedText, loadVectorStore, saveVectorStore } from './vector.mjs'
 
 const BATCH = 64
+// Safety margin under the 8192-token input limit of common embedding models
+// (e.g. text-embedding-3-small). We cap ONLY the text sent to the embedding API;
+// whole-page retrieval is unaffected — the page file and its BM25 text are never
+// touched, only the vector's input is truncated so one huge page can't abort the run.
+const EMBED_TOKEN_CAP = 8000
+
+// Largest prefix of `text` whose estimateTokens is within EMBED_TOKEN_CAP.
+// estimateTokens is a deterministic pure function, monotonic non-decreasing in
+// prefix length, so a binary search over the string finds the cut with no deps.
+function capEmbedText(text) {
+  if (estimateTokens(text) <= EMBED_TOKEN_CAP) return text
+  let lo = 0, hi = text.length
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2)
+    if (estimateTokens(text.slice(0, mid)) <= EMBED_TOKEN_CAP) lo = mid
+    else hi = mid - 1
+  }
+  return text.slice(0, lo)
+}
 
 export async function embedTexts(cfg, t, texts) {
   const res = await t.fetchImpl(`${cfg.baseURL.replace(/\/$/, '')}/embeddings`, {
@@ -35,9 +55,12 @@ export async function embedKb(kbRoot, { fetchImpl } = {}) {
   const nextPages = {}
   let reused = 0
   for (const pg of pages) {
-    const text = pageEmbedText(pg)
+    const raw = pageEmbedText(pg)
+    const text = capEmbedText(raw)
+    const truncated = text !== raw
     const hash = sha256Text(text)
     if (reuse[pg.relPath]?.hash === hash) { nextPages[pg.relPath] = reuse[pg.relPath]; reused++; continue }
+    if (truncated) process.stderr.write(`warning: ${pg.relPath} embed text truncated to ~${EMBED_TOKEN_CAP} tokens (page exceeds embedding model input limit)\n`)
     jobs.push({ relPath: pg.relPath, text, hash })
   }
   let dim = (prev && prev.model === cfg.embeddingModel) ? prev.dim : null

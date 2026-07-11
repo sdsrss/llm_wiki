@@ -6,7 +6,8 @@ import path from 'node:path'
 import { initKb } from '../src/init.mjs'
 import { loadLlmConfig } from '../src/llm-config.mjs'
 import { embedTexts, embedKb } from '../src/embed.mjs'
-import { loadVectorStore } from '../src/vector.mjs'
+import { loadVectorStore, pageEmbedText } from '../src/vector.mjs'
+import { estimateTokens } from '../src/scanner.mjs'
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-emb-'))
@@ -105,6 +106,42 @@ test('embedKb is incremental: reuses unchanged, prunes removed/invalidated, re-e
   const r4 = await embedKb(d, { fetchImpl: f4.fetchImpl })
   assert.equal(r4.embedded, 1) // only a.md is valid now
   assert.equal(loadVectorStore(d).model, 'emb-2')
+})
+
+test('embedKb caps embed input at ~8000 tokens for oversized pages without touching the page file', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  seedPage(d, 'sources/small.md', 'Small', 'tiny body')
+  // Body that pushes estimateTokens(pageEmbedText(pg)) far past the 8000 cap
+  // (English ~4 chars/token -> ~48000 chars ≈ 12000 tokens).
+  const bigBody = 'lorem ipsum dolor sit amet '.repeat(1800)
+  seedPage(d, 'sources/big.md', 'Big', bigBody)
+  setCfg(t, d, CFG)
+
+  const bigFile = path.join(d, 'wiki/sources/big.md')
+  const before = fs.readFileSync(bigFile)
+  // Sanity: the page as-authored really does exceed the cap.
+  assert.ok(estimateTokens(pageEmbedText({ data: { title: 'Big', description: 'desc Big', tags: ['x'] }, body: bigBody })) > 8000)
+
+  const stderr = []
+  const origWrite = process.stderr.write.bind(process.stderr)
+  process.stderr.write = (s) => { stderr.push(String(s)); return true }
+  t.after(() => { process.stderr.write = origWrite })
+
+  const f = fakeEmbed(() => [1, 0])
+  const r = await embedKb(d, { fetchImpl: f.fetchImpl })
+
+  // (a) every string actually sent to the API is within the cap
+  for (const call of f.calls)
+    for (const input of call.body.input)
+      assert.ok(estimateTokens(input) <= 8000, `sent input over cap: ${estimateTokens(input)}`)
+  // (b) the oversized page still gets a vector in the store, counted as embedded
+  assert.equal(r.embedded, 2)
+  assert.ok(loadVectorStore(d).pages['sources/big.md'])
+  // (c) the page file on disk is byte-for-byte unchanged
+  assert.deepEqual(fs.readFileSync(bigFile), before)
+  // (d) a per-page truncation warning is emitted to stderr
+  assert.ok(stderr.some(s => /sources\/big\.md embed text truncated/.test(s)), `stderr: ${stderr.join('')}`)
 })
 
 test('embedKb counts only pages actually stored: zero-vector page is skipped, not counted', async (t) => {
