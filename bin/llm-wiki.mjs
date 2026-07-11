@@ -11,7 +11,8 @@ import { askKb } from '../src/ask.mjs'
 import { lintKb } from '../src/lint.mjs'
 import { statusKb } from '../src/status.mjs'
 import { connectProject, installSkills } from '../src/connect.mjs'
-import { exportGraph } from '../src/export.mjs'
+import { exportGraph, loadGraph } from '../src/export.mjs'
+import { shortestPath, neighborhood, hubs } from '../src/graph.mjs'
 import { runMcpServer } from '../src/mcp.mjs'
 
 program.name('llm-wiki').description('Compile messy directories into an llm_wiki knowledge base')
@@ -130,6 +131,42 @@ program.command('export')
   .action((opts) => {
     const r = exportGraph(opts.kb, { format: opts.format, out: opts.out })
     console.log(`exported ${r.nodeCount} nodes / ${r.edgeCount} edges -> ${r.out}`)
+  })
+
+const graphCmd = program.command('graph').description('query wiki/graph.json: path | neighbors | hubs (zero-LLM traversal)')
+
+graphCmd.command('path <from> <to>')
+  .description('shortest link chain between two page ids (either link direction)')
+  .option('--kb <dir>', 'knowledge base root', '.')
+  .action((from, to, opts) => {
+    const r = shortestPath(loadGraph(opts.kb), from, to)
+    if (!r) { console.log(`no path between ${from} and ${to}`); return }
+    console.log(r.nodes[0])
+    for (const h of r.hops) console.log(`  ${h.dir === 'out' ? `-[${h.type}]->` : `<-[${h.type}]-`} ${h.to}${h.confidence ? `  (${h.confidence})` : ''}`)
+  })
+
+graphCmd.command('neighbors <id>')
+  .description('pages within N hops (links counted in both directions)')
+  .option('-d, --depth <n>', 'expansion depth', '1')
+  .option('--kb <dir>', 'knowledge base root', '.')
+  .action((id, opts) => {
+    const depth = Number.parseInt(opts.depth, 10)
+    if (!Number.isFinite(depth) || depth < 1) { console.error(`invalid depth: ${opts.depth} (expected a positive integer)`); process.exit(1) }
+    const r = neighborhood(loadGraph(opts.kb), id, depth)
+    if (!r.length) { console.log(`${id} has no linked neighbors`); return }
+    for (const n of r) console.log(`d=${n.distance}  ${n.id}  [${n.type}${n.confidence ? '/' + n.confidence : ''} ${n.dir}]`)
+  })
+
+graphCmd.command('hubs')
+  .description('most-connected pages (degree ranking; raw files excluded)')
+  .option('--top <n>', 'how many to show', '10')
+  .option('--kb <dir>', 'knowledge base root', '.')
+  .action((opts) => {
+    const top = Number.parseInt(opts.top, 10)
+    if (!Number.isFinite(top) || top < 1) { console.error(`invalid --top: ${opts.top} (expected a positive integer)`); process.exit(1) }
+    for (const h of hubs(loadGraph(opts.kb), { top })) {
+      console.log(`${String(h.degree).padStart(3)}  ${h.id}  (in ${h.in} / out ${h.out})  ${h.title}`)
+    }
   })
 
 program.command('mcp')
