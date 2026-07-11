@@ -34,6 +34,12 @@ function capEmbedText(text) {
     if (worstCaseEmbedTokens(text.slice(0, mid)) <= EMBED_TOKEN_CAP) lo = mid
     else hi = mid - 1
   }
+  // Slicing by UTF-16 code unit can split an astral char (e.g. emoji, CJK ext-B),
+  // leaving a lone high surrogate (0xD800–0xDBFF) at the boundary. JSON.stringify
+  // escapes it as a literal \uD83D and a strict provider can reject the request —
+  // the exact abort this cap exists to prevent. Drop a dangling high surrogate.
+  const last = text.charCodeAt(lo - 1)
+  if (lo > 0 && last >= 0xD800 && last <= 0xDBFF) lo--
   return text.slice(0, lo)
 }
 

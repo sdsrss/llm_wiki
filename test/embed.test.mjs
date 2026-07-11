@@ -7,6 +7,7 @@ import { initKb } from '../src/init.mjs'
 import { loadLlmConfig } from '../src/llm-config.mjs'
 import { embedTexts, embedKb } from '../src/embed.mjs'
 import { loadVectorStore, pageEmbedText } from '../src/vector.mjs'
+import { listWikiPages, isInvalidated } from '../src/pages.mjs'
 
 // Recompute embed.mjs's worst-case cap formula inline (import nothing new across
 // modules): CJK char = 1 token, everything else = 0.5 token (pessimistic BPE).
@@ -149,6 +150,49 @@ test('embedKb caps embed input at ~8000 tokens for oversized pages without touch
   assert.deepEqual(fs.readFileSync(bigFile), before)
   // (d) a per-page truncation warning is emitted to stderr
   assert.ok(stderr.some(s => /sources\/big\.md embed text truncated/.test(s)), `stderr: ${stderr.join('')}`)
+})
+
+test('embedKb never leaves a lone high surrogate at the cap boundary', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const isHigh = (u) => u >= 0xD800 && u <= 0xDBFF
+  // Trimless copy of the cap's binary search (recompute inline, no cross-module
+  // import) — used only to pick a body whose oversized cut would split an astral
+  // char (🙂 = surrogate pair D83D DE42), i.e. land on a lone high surrogate.
+  const untrimmedCut = (text) => {
+    let lo = 0, hi = text.length
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2)
+      if (worstCaseEmbedTokens(text.slice(0, mid)) <= 8000) lo = mid
+      else hi = mid - 1
+    }
+    return lo
+  }
+  // Oversized emoji body; nudge alignment by a few units until the untrimmed cut
+  // of the ACTUALLY-loaded page falls mid-pair (the exact boundary the fix must
+  // repair). Compute against the loaded page — not a hand-built probe — because
+  // the frontmatter parser keeps a leading newline, shifting the offset by one.
+  let found = false
+  for (let shift = 0; shift < 8 && !found; shift++) {
+    seedPage(d, 'sources/surr.md', 'Surr', 'a'.repeat(shift) + '🙂'.repeat(7000))
+    const pg = listWikiPages(d).find(p => !p.error && !isInvalidated(p) && p.relPath === 'sources/surr.md')
+    const text = pageEmbedText(pg)
+    if (isHigh(text.charCodeAt(untrimmedCut(text) - 1))) found = true
+  }
+  assert.ok(found, 'test setup: no shift produced a mid-surrogate-pair cut')
+  setCfg(t, d, CFG)
+
+  const f = fakeEmbed(() => [1, 0])
+  const r = await embedKb(d, { fetchImpl: f.fetchImpl })
+  assert.equal(r.embedded, 1)
+
+  const inputs = f.calls.flatMap(c => c.body.input)
+  assert.ok(inputs.length > 0)
+  for (const input of inputs) {
+    const lastUnit = input.charCodeAt(input.length - 1)
+    assert.ok(!isHigh(lastUnit), `input ends in lone high surrogate: 0x${lastUnit.toString(16)}`)
+    assert.ok(worstCaseEmbedTokens(input) <= 8000, `sent input over cap: ${worstCaseEmbedTokens(input)}`)
+  }
 })
 
 test('embedKb counts only pages actually stored: zero-vector page is skipped, not counted', async (t) => {
