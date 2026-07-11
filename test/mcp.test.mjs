@@ -10,6 +10,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { initKb } from '../src/init.mjs'
 import { buildIndex } from '../src/indexer.mjs'
 import { createMcpServer } from '../src/mcp.mjs'
+import { saveVectorStore } from '../src/vector.mjs'
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-mcp-'))
@@ -242,4 +243,66 @@ test('wiki_graph leaf branches: no path and no neighbors return guidance, not er
   const n = await client.callTool({ name: 'wiki_graph', arguments: { op: 'neighbors', id: 'entities/island' } })
   assert.equal(n.isError ?? false, false)
   assert.match(n.content[0].text, /no linked neighbors/)
+})
+
+// --- wiki_search hybrid (v2.5) ---
+
+function setLlmCfg(t, d) {
+  const saved = { oa: process.env.OPENAI_API_KEY, or: process.env.OPENROUTER_API_KEY }
+  delete process.env.OPENAI_API_KEY
+  delete process.env.OPENROUTER_API_KEY
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR, { recursive: true })
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-1' }))
+  t.after(() => {
+    delete process.env.LLM_WIKI_CONFIG_DIR
+    if (saved.oa !== undefined) process.env.OPENAI_API_KEY = saved.oa
+    if (saved.or !== undefined) process.env.OPENROUTER_API_KEY = saved.or
+  })
+}
+
+function enableVectors(d) {
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true }))
+  saveVectorStore(d, { model: 'emb-1', dim: 2, pages: {
+    'sources/karpathy-gist.md': { hash: 'h', vec: [1, 0] },
+  } })
+}
+
+test('wiki_search fuses vector hits when the KB has embeddings enabled', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  enableVectors(d)
+  setLlmCfg(t, d)
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ data: [{ index: 0, embedding: [1, 0] }] }) })
+  const client = await connectClient(t, d, { fetchImpl })
+  // Cross-language query: zero lexical overlap with the page, vector finds it.
+  const r = await client.callTool({ name: 'wiki_search', arguments: { query: 'what are the three layers' } })
+  assert.equal(r.isError ?? false, false)
+  assert.match(r.content[0].text, /sources\/karpathy-gist/, 'vector-only hit surfaces')
+  assert.match(r.content[0].text, /vector/, 'hit line names its retrieval source')
+})
+
+test('wiki_search stays pure BM25 (no embedding call, same format) when vectorEnabled is off', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  let called = 0
+  const fetchImpl = async () => { called++; throw new Error('must not be called') }
+  const client = await connectClient(t, d, { fetchImpl })
+  const r = await client.callTool({ name: 'wiki_search', arguments: { query: '三层架构' } })
+  assert.equal(r.isError ?? false, false)
+  assert.match(r.content[0].text, /\(score \d/, 'default path keeps the BM25 score format')
+  assert.equal(called, 0, 'no network on the default path')
+})
+
+test('wiki_search degrades to BM25 results when the embedding call fails', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  enableVectors(d)
+  setLlmCfg(t, d)
+  const fetchImpl = async () => ({ ok: false, status: 500, text: async () => 'boom' })
+  const client = await connectClient(t, d, { fetchImpl })
+  const r = await client.callTool({ name: 'wiki_search', arguments: { query: '三层架构' } })
+  assert.equal(r.isError ?? false, false, 'fail-open: not an MCP error')
+  assert.match(r.content[0].text, /karpathy-gist/, 'BM25 hits still returned')
 })

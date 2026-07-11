@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { kbPaths } from './paths.mjs'
 import { listWikiPages, isInvalidated } from './pages.mjs'
-import { retrievePages, askKb } from './ask.mjs'
+import { locatePages, askKb } from './ask.mjs'
 import { loadGraph } from './export.mjs'
 import { shortestPath, neighborhood, hubs } from './graph.mjs'
 
@@ -33,18 +33,24 @@ export function createMcpServer(kbRoot, { fetchImpl } = {}) {
 
   server.registerTool('wiki_search', {
     title: 'Locate pages',
-    description: 'Locate knowledge-base pages by keyword (BM25 — exact-word lexical match). Returns page ids, titles and one-line descriptions, never full text; read the promising ones with wiki_read_page. Use keywords in the same language as the KB pages. A cross-language or fully rephrased query can legitimately return nothing — then fall back to wiki_overview and pick pages from the catalog yourself.',
+    description: 'Locate knowledge-base pages by keyword or phrase. Always uses BM25 lexical match; when the KB has embeddings enabled, a semantic vector match is fused in, so cross-language and paraphrased queries also work. Returns page ids, titles and one-line descriptions, never full text; read the promising ones with wiki_read_page. If nothing comes back, fall back to wiki_overview and pick pages from the catalog yourself.',
     inputSchema: { query: z.string(), k: z.number().int().min(1).max(20).optional() },
   }, async ({ query, k = 6 }) => {
-    const hits = retrievePages(kbRoot, query, k)
+    // 'auto' mode: opt-in via the KB's vectorEnabled, fail-open on any vector
+    // error — KBs without embeddings keep the exact pre-v2.5 BM25 behavior.
+    const { hits, usedVector } = await locatePages(kbRoot, query, { k, ...(fetchImpl ? { fetchImpl } : {}) })
     if (hits.length === 0) {
-      return textResult('No lexical match (BM25 is exact-word based). Try keywords in the language of the KB pages, or call wiki_overview and pick pages from the catalog yourself.')
+      return textResult(usedVector
+        ? 'No match from BM25 or vector retrieval. Call wiki_overview and pick pages from the catalog yourself.'
+        : 'No lexical match (BM25 is exact-word based). Try keywords in the language of the KB pages, or call wiki_overview and pick pages from the catalog yourself.')
     }
     const byPath = new Map(listWikiPages(kbRoot).filter(pg => !pg.error).map(pg => [pg.relPath, pg]))
     const lines = hits.map(h => {
       const pg = byPath.get(h.relPath)
       const id = h.relPath.replace(/\.md$/, '')
-      return `- ${id} (score ${h.score.toFixed(2)}) — ${pg?.data.title ?? ''}: ${pg?.data.description ?? ''}`
+      // RRF scores are not comparable to BM25 scores — name the channels instead.
+      const tag = usedVector ? h.sources.join('+') : `score ${h.score.toFixed(2)}`
+      return `- ${id} (${tag}) — ${pg?.data.title ?? ''}: ${pg?.data.description ?? ''}`
     })
     return textResult(`${DATA_NOTICE}\n\n${lines.join('\n')}`)
   })
