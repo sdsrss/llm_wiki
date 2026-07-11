@@ -36,17 +36,25 @@ export function rrfFuse(lists, k) {
 // BM25 always; vector channel only when opted in (vectorEnabled) AND the
 // sidecar exists AND an embeddingModel is configured. Fail-open: any vector
 // error degrades to BM25 with a single stderr warning.
-export async function locatePages(kbRoot, question, { k = 6, fetchImpl } = {}) {
+export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieval = 'auto' } = {}) {
+  if (!['auto', 'bm25', 'hybrid'].includes(retrieval)) throw new Error(`unknown retrieval mode: ${retrieval}`)
   const bm25 = retrievePages(kbRoot, question, k)
   const asBm25 = () => ({ hits: bm25.map(h => ({ ...h, sources: ['bm25'] })), usedVector: false })
-  if (!loadKbConfig(kbRoot).vectorEnabled) return asBm25()
+  if (retrieval === 'bm25') return asBm25()
+  // 'hybrid' is an explicit request: prerequisites failing is an error, not a
+  // silent degrade. 'auto' keeps the opt-in + fail-open contract unchanged.
+  const unavailable = (what) => {
+    if (retrieval === 'hybrid') throw new Error(`retrieval 'hybrid' unavailable: ${what}`)
+    return asBm25()
+  }
+  if (retrieval === 'auto' && !loadKbConfig(kbRoot).vectorEnabled) return asBm25()
   const store = loadVectorStore(kbRoot)
-  if (!store) return asBm25()
+  if (!store) return unavailable('no wiki/.vectors.json — run `llm-wiki embed` first')
   const cfg = loadLlmConfig(kbRoot)
-  if (!cfg?.embeddingModel) return asBm25()
+  if (!cfg?.embeddingModel) return unavailable('no embeddingModel in ~/.llm-wiki/config.json')
   // A store built by a different embeddingModel lives in a foreign vector space:
   // fusing it produces silent garbage, so treat it as missing (not a failure).
-  if (store.model !== cfg.embeddingModel) return asBm25()
+  if (store.model !== cfg.embeddingModel) return unavailable(`vector store was built with "${store.model}" but config says "${cfg.embeddingModel}" — re-run \`llm-wiki embed\``)
   try {
     const t = fetchImpl ? { fetchImpl, dispatcher: undefined } : await makeTransport()
     const [qv] = await embedTexts(cfg, t, [question])
@@ -60,12 +68,13 @@ export async function locatePages(kbRoot, question, { k = 6, fetchImpl } = {}) {
     const vecHitsValid = vecHits.filter(h => valid.has(h.relPath))
     return { hits: rrfFuse([{ source: 'bm25', hits: bm25 }, { source: 'vector', hits: vecHitsValid }], k), usedVector: true }
   } catch (err) {
+    if (retrieval === 'hybrid') throw err
     process.stderr.write(`warning: vector retrieval unavailable (${err.message}); falling back to BM25\n`)
     return asBm25()
   }
 }
 
-async function chatCompletion(cfg, t, messages) {
+export async function chatCompletion(cfg, t, messages) {
   const res = await t.fetchImpl(`${cfg.baseURL.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
@@ -118,9 +127,9 @@ async function pickPagesFromListing(p, question, k, cfg, t, validIds) {
   return picked.map(id => ({ relPath: `${id}.md`, score: 0 }))
 }
 
-export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fetchImpl } = {}) {
+export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fetchImpl, retrieval = 'auto' } = {}) {
   const p = kbPaths(kbRoot)
-  let { hits } = await locatePages(kbRoot, question, { k, fetchImpl })
+  let { hits } = await locatePages(kbRoot, question, { k, fetchImpl, retrieval })
   if (retrieveOnly) return { pages: hits, answer: null }
   let validIds
   if (hits.length === 0) {

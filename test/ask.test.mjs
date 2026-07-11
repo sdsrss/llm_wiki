@@ -445,3 +445,53 @@ test('makeTransport: global fetch without proxy, undici fetch + dispatcher with 
   assert.equal(typeof proxied.dispatcher.dispatch, 'function')
   await proxied.dispatcher.close()
 })
+
+test('locatePages retrieval:"bm25" ignores an enabled vector channel entirely', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true }))
+  saveVectorStore(d, { model: 'emb-1', dim: 2, pages: {
+    'sources/karpathy-gist.md': { hash: 'h', vec: [1, 0] },
+    'sources/other.md': { hash: 'h', vec: [0, 1] },
+  } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-1' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  // A fetchImpl that would succeed and place a vector hit if the vector channel
+  // were consulted: pre-implementation this fuses (usedVector: true, a hit
+  // sourced from 'vector'); with retrieval:'bm25' the channel is never touched.
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ data: [{ index: 0, embedding: [1, 0] }] }) })
+  const r = await locatePages(d, 'what are the three layers', { fetchImpl, retrieval: 'bm25' })
+  assert.equal(r.usedVector, false)
+  for (const h of r.hits) assert.deepEqual(h.sources, ['bm25'])
+})
+
+test('locatePages retrieval:"hybrid" throws when the vector store is missing', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  await assert.rejects(
+    () => locatePages(d, 'anything', { retrieval: 'hybrid' }),
+    /retrieval 'hybrid' unavailable: .*\.vectors\.json/,
+  )
+})
+
+test('locatePages retrieval:"hybrid" fuses even when vectorEnabled is false', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  // no vectorEnabled in wiki.config.json — an explicit 'hybrid' request overrides
+  // the opt-in flag rather than degrading to BM25.
+  saveVectorStore(d, { model: 'emb-1', dim: 2, pages: {
+    'sources/karpathy-gist.md': { hash: 'h', vec: [1, 0] },
+    'sources/other.md': { hash: 'h', vec: [0, 1] },
+  } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-1' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ data: [{ index: 0, embedding: [1, 0] }] }) })
+  const r = await locatePages(d, 'what are the three layers', { fetchImpl, retrieval: 'hybrid' })
+  assert.equal(r.usedVector, true)
+})
