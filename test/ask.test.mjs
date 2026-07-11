@@ -495,3 +495,9 @@ test('locatePages retrieval:"hybrid" fuses even when vectorEnabled is false', as
   const r = await locatePages(d, 'what are the three layers', { fetchImpl, retrieval: 'hybrid' })
   assert.equal(r.usedVector, true)
 })
+
+test('locatePages rejects an unknown retrieval mode', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  await assert.rejects(locatePages(d, '三层架构', { retrieval: 'fuzzy' }), /unknown retrieval mode: fuzzy/)
+})

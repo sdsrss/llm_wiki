@@ -210,3 +210,31 @@ test('embedKb counts only pages actually stored: zero-vector page is skipped, no
   assert.ok(store.pages['sources/a.md'])
   assert.equal(store.pages['sources/z.md'], undefined)
 })
+
+test('embedKb caps an oversized pure-CJK page the same way (cjk chars count 1 token each)', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const cjkBody = '知识库页面内容压缩测试'.repeat(900) // 9900 CJK chars > 8000-token cap
+  seedPage(d, 'sources/cjk.md', 'Cjk', cjkBody)
+  setCfg(t, d, CFG)
+
+  const cjkFile = path.join(d, 'wiki/sources/cjk.md')
+  const before = fs.readFileSync(cjkFile)
+  assert.ok(worstCaseEmbedTokens(pageEmbedText({ data: { title: 'Cjk', description: 'desc Cjk', tags: ['x'] }, body: cjkBody })) > 8000)
+
+  const stderr = []
+  const origWrite = process.stderr.write.bind(process.stderr)
+  process.stderr.write = (s) => { stderr.push(String(s)); return true }
+  t.after(() => { process.stderr.write = origWrite })
+
+  const f = fakeEmbed(() => [1, 0])
+  const r = await embedKb(d, { fetchImpl: f.fetchImpl })
+
+  for (const call of f.calls)
+    for (const input of call.body.input)
+      assert.ok(worstCaseEmbedTokens(input) <= 8000, `sent input over cap: ${worstCaseEmbedTokens(input)}`)
+  assert.equal(r.embedded, 1)
+  assert.ok(loadVectorStore(d).pages['sources/cjk.md'])
+  assert.deepEqual(fs.readFileSync(cjkFile), before)
+  assert.ok(stderr.some(s => /sources\/cjk\.md embed text truncated/.test(s)), `stderr: ${stderr.join('')}`)
+})

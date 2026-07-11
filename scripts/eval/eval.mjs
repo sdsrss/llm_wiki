@@ -8,7 +8,7 @@ import { retrievePages, rrfFuse } from '../../src/ask.mjs'
 import { loadVectorStore, normalize, cosineTopK } from '../../src/vector.mjs'
 import { embedTexts } from '../../src/embed.mjs'
 import { loadLlmConfig, makeTransport } from '../../src/llm-config.mjs'
-import { listWikiPages } from '../../src/pages.mjs'
+import { listWikiPages, isInvalidated } from '../../src/pages.mjs'
 import { readJsonFile } from '../../src/json.mjs'
 import { recallAtK, mrr, summarize, degreeRank } from './lib.mjs'
 
@@ -23,7 +23,7 @@ const probes = fs.readFileSync(probesFile, 'utf8').split('\n').filter(Boolean).m
   try { return JSON.parse(l) } catch { console.error(`probes line ${i + 1}: invalid JSON`); process.exit(1) }
 })
 const PROBE_TYPES = ['fact', 'multihop', 'xlang', 'none']
-const validIds = new Set(listWikiPages(kb).filter(p => !p.error).map(p => p.relPath.replace(/\.md$/, '')))
+const validIds = new Set(listWikiPages(kb).filter(p => !p.error && !isInvalidated(p)).map(p => p.relPath.replace(/\.md$/, '')))
 for (const p of probes) {
   const type = p.type ?? 'fact'
   if (!p.q || !Array.isArray(p.expect) || !PROBE_TYPES.includes(type)) {

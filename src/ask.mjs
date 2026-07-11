@@ -33,9 +33,12 @@ export function rrfFuse(lists, k) {
   return [...acc.values()].sort((a, b) => b.score - a.score).slice(0, k)
 }
 
-// BM25 always; vector channel only when opted in (vectorEnabled) AND the
-// sidecar exists AND an embeddingModel is configured. Fail-open: any vector
-// error degrades to BM25 with a single stderr warning.
+// Three modes. 'auto' (default): BM25 always; vector channel only when opted
+// in (vectorEnabled) AND the sidecar exists AND an embeddingModel is
+// configured — fail-open, any vector error degrades to BM25 with a single
+// stderr warning. 'bm25': lexical only, returns before any vector access.
+// 'hybrid': explicit BM25+vector fusion — every missing prerequisite (and any
+// vector error) throws instead of degrading, and vectorEnabled is ignored.
 export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieval = 'auto' } = {}) {
   if (!['auto', 'bm25', 'hybrid'].includes(retrieval)) throw new Error(`unknown retrieval mode: ${retrieval}`)
   const bm25 = retrievePages(kbRoot, question, k)
