@@ -115,6 +115,10 @@ test('wikilinksToMarkdown converts plain, aliased, anchored and .md-suffixed lin
   assert.match(out, /\[raw\/doc\]\(\.\.\/raw\/doc\.md\)/, 'raw link resolves against the sibling raw/ layer')
   assert.ok(!out.includes('[['), 'no wikilinks remain')
   assert.equal(wikilinksToMarkdown('no links here', ''), 'no links here')
+  assert.match(wikilinksToMarkdown('x [[#h]]', 'sources'), /\[h\]\(#h\)/, 'anchor-only link points at the same-page heading')
+  assert.match(wikilinksToMarkdown('x [[#h|see]]', 'sources'), /\[see\]\(#h\)/, 'anchor-only link keeps its alias')
+  assert.match(wikilinksToMarkdown('x [[entities/thing|]]', 'sources'), /\[entities\/thing\]\(\.\.\/entities\/thing\.md\)/, 'empty alias falls back to target label')
+  assert.equal(wikilinksToMarkdown('x [[]] y', 'sources'), 'x [[]] y', 'degenerate empty wikilink left untouched')
 })
 
 test('exportMarkdownPages mirrors the wiki layout with converted links and preserved frontmatter', (t) => {
@@ -128,4 +132,23 @@ test('exportMarkdownPages mirrors the wiki layout with converted links and prese
   const idx = fs.readFileSync(path.join(d, 'wiki-md/index.md'), 'utf8')
   assert.ok(!idx.includes('[['), 'index.md wikilinks converted (root-relative, no ../ prefix)')
   assert.match(idx, /\(sources\/doc\.md\)/)
+})
+
+test('exportMarkdownPages marker-guards a clean re-export and refuses foreign non-empty dirs', (t) => {
+  const d = seedKb(t)
+  const r1 = exportMarkdownPages(d, {})
+  const marker = path.join(r1.out, '.llm-wiki-export')
+  assert.ok(fs.existsSync(marker), 'marker written on first export')
+  assert.ok(fs.existsSync(path.join(r1.out, 'entities/thing.md')), 'entity page present after first export')
+  // delete a wiki page, then re-export: its stale converted copy must be gone
+  fs.rmSync(path.join(d, 'wiki/entities/thing.md'))
+  exportMarkdownPages(d, {})
+  assert.ok(!fs.existsSync(path.join(r1.out, 'entities/thing.md')), 'stale converted page removed on re-export')
+  assert.ok(fs.existsSync(marker), 'marker present after re-export')
+  // refuse to overwrite a non-empty dir that is not an llm-wiki export dir
+  const stray = path.join(d, 'foreign-out')
+  fs.mkdirSync(stray, { recursive: true })
+  fs.writeFileSync(path.join(stray, 'keep.md'), 'x')
+  assert.throws(() => exportMarkdownPages(d, { out: stray }), /refusing to overwrite non-empty/)
+  assert.ok(fs.existsSync(path.join(stray, 'keep.md')), 'foreign file left untouched')
 })

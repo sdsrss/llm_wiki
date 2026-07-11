@@ -33,19 +33,39 @@ export function loadGraph(kbRoot) {
 // index.md), so targets become correct relative paths. Known limitation:
 // wikilink-shaped text inside code fences is converted too — page bodies are
 // prose distilled from documents, not code, so this is acceptable.
-const WIKILINK_CONVERT_RE = /\[\[([^\]|#]+)(#[^\]|]*)?(?:\|([^\]]*))?\]\]/g
+const WIKILINK_CONVERT_RE = /\[\[([^\]|#]*)(#[^\]|]*)?(?:\|([^\]]*))?\]\]/g
 
 export function wikilinksToMarkdown(body, fromDir = '') {
-  return body.replace(WIKILINK_CONVERT_RE, (_, target, anchor, label) => {
+  return body.replace(WIKILINK_CONVERT_RE, (m, target, anchor, label) => {
     const t = target.trim().replace(/\.md$/, '')
+    if (t === '') {
+      // anchor-only link ([[#h]]) → same-page heading link; degenerate [[]] left as-is
+      if (!anchor) return m
+      return `[${label || anchor.slice(1)}](${anchor})`
+    }
     const rel = path.relative(fromDir, `${t}.md`).split(path.sep).join('/')
-    return `[${label ?? t}](${rel}${anchor ?? ''})`
+    return `[${label || t}](${rel}${anchor ?? ''})`
   })
 }
+
+// Marker file that certifies a directory as an llm-wiki export we own and may
+// wipe. Cleaning on re-export keeps the copy a faithful mirror (deleted/renamed
+// pages don't leave stale files); the marker guard prevents blind-rm of an
+// arbitrary user-supplied --out path.
+const EXPORT_MARKER = '.llm-wiki-export'
 
 export function exportMarkdownPages(kbRoot, { out } = {}) {
   const p = kbPaths(kbRoot)
   const outDir = path.resolve(out ?? path.join(kbRoot, 'wiki-md'))
+  const marker = path.join(outDir, EXPORT_MARKER)
+  if (fs.existsSync(outDir)) {
+    if (fs.existsSync(marker)) fs.rmSync(outDir, { recursive: true, force: true })
+    else if (fs.readdirSync(outDir).length > 0) {
+      throw new Error(`refusing to overwrite non-empty ${outDir} (not an llm-wiki export dir — pass an empty or new --out)`)
+    }
+  }
+  fs.mkdirSync(outDir, { recursive: true })
+  fs.writeFileSync(marker, '')
   let pageCount = 0
   const writeConverted = (srcAbs, relPath) => {
     const dest = path.join(outDir, relPath)
