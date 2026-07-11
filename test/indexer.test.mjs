@@ -107,3 +107,34 @@ test('buildIndex annotates invalidated pages, excludes them from llms.txt, and a
   assert.equal(graph.nodes.find(n => n.id === 'entities/new').status, undefined)
   assert.ok(graph.edges.some(e => e.source === 'entities/old' && e.target === 'entities/new' && e.type === 'superseded_by'))
 })
+
+test('buildIndex merges relations into graph.json with type/confidence and labels builtin edges', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/sources/art.md'), page('source', 'Article', 'links [[entities/kar]]'))
+  fs.writeFileSync(path.join(d, 'wiki/entities/kar.md'), page('entity', 'Karpathy', '',
+    'sources: [raw/a.md]\nrelations:\n  - to: sources/art\n    type: derived_from\n  - to: sources/art.md\n    type: derived_from\n  - to: concepts/nope\n    type: uses\n  - not-a-map\n'))
+  buildIndex(d)
+  const graph = JSON.parse(fs.readFileSync(path.join(d, 'wiki/graph.json'), 'utf8'))
+  const rel = graph.edges.filter(e => e.source === 'entities/kar' && e.type === 'derived_from')
+  assert.equal(rel.length, 1, 'valid relation merged exactly once (.md-suffix duplicate deduped)')
+  assert.deepEqual(rel[0], { source: 'entities/kar', target: 'sources/art', type: 'derived_from', confidence: 'inferred' })
+  assert.ok(!graph.edges.some(e => e.target === 'concepts/nope'), 'relation to a missing page is dropped from the graph (lint reports it)')
+  assert.equal(graph.edges.find(e => e.type === 'wikilink').confidence, 'inferred')
+  assert.equal(graph.edges.find(e => e.type === 'source').confidence, 'extracted')
+})
+
+test('buildIndex keeps valid relation confidence and normalizes invalid values to inferred', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/sources/a.md'), page('source', 'A'))
+  // NOTE: the page() helper DROPS its 4th arg for type 'source' — use a concept page
+  // so the relations block actually lands in the frontmatter.
+  fs.writeFileSync(path.join(d, 'wiki/concepts/b.md'), page('concept', 'B', '',
+    'sources: [raw/a.md]\nrelations:\n  - to: sources/a\n    type: contrasts_with\n    confidence: ambiguous\n  - to: sources/a\n    type: uses\n    confidence: banana\nsuperseded_by: sources/a\nstatus: invalidated\n'))
+  buildIndex(d)
+  const graph = JSON.parse(fs.readFileSync(path.join(d, 'wiki/graph.json'), 'utf8'))
+  assert.equal(graph.edges.find(e => e.type === 'contrasts_with').confidence, 'ambiguous')
+  assert.equal(graph.edges.find(e => e.type === 'uses').confidence, 'inferred', 'unknown confidence value falls back to inferred (lint reports it)')
+  assert.equal(graph.edges.find(e => e.type === 'superseded_by').confidence, 'extracted')
+})

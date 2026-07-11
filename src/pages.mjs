@@ -8,6 +8,8 @@ const REQUIRED = ['type', 'title', 'description', 'tags', 'created', 'updated']
 
 export const PAGE_STATUSES = ['active', 'invalidated']
 
+export const RELATION_CONFIDENCES = ['extracted', 'inferred', 'ambiguous']
+
 export function isInvalidated(page) {
   return page.data?.status === 'invalidated'
 }

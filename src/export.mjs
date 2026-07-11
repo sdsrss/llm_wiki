@@ -34,6 +34,7 @@ export function toGraphML(graph) {
     '  <key id="d1" for="node" attr.name="title" attr.type="string"/>',
     '  <key id="d2" for="node" attr.name="status" attr.type="string"/>',
     '  <key id="d3" for="edge" attr.name="type" attr.type="string"/>',
+    '  <key id="d4" for="edge" attr.name="confidence" attr.type="string"/>',
     '  <graph id="llm_wiki" edgedefault="directed">',
   ]
   for (const n of graph.nodes) {
@@ -44,7 +45,8 @@ export function toGraphML(graph) {
     lines.push('    </node>')
   }
   graph.edges.forEach((e, i) => {
-    lines.push(`    <edge id="e${i}" source="${xmlEscape(e.source)}" target="${xmlEscape(e.target)}"><data key="d3">${xmlEscape(e.type ?? '')}</data></edge>`)
+    const conf = e.confidence ? `<data key="d4">${xmlEscape(e.confidence)}</data>` : ''
+    lines.push(`    <edge id="e${i}" source="${xmlEscape(e.source)}" target="${xmlEscape(e.target)}"><data key="d3">${xmlEscape(e.type ?? '')}</data>${conf}</edge>`)
   })
   lines.push('  </graph>', '</graphml>')
   return lines.join('\n') + '\n'
@@ -56,7 +58,8 @@ export function toCypher(graph) {
     `MERGE (n:${label(n.type)} {id: '${cyEscape(n.id)}'}) SET n.title = '${cyEscape(n.title ?? '')}'${n.status ? `, n.status = '${cyEscape(n.status)}'` : ''};`)
   for (const e of graph.edges) {
     const rel = String(e.type ?? 'link').replace(/[^a-zA-Z_]/g, '_').toUpperCase()
-    lines.push(`MATCH (a {id: '${cyEscape(e.source)}'}), (b {id: '${cyEscape(e.target)}'}) MERGE (a)-[:${rel}]->(b);`)
+    const set = e.confidence ? ` SET r.confidence = '${cyEscape(e.confidence)}'` : ''
+    lines.push(`MATCH (a {id: '${cyEscape(e.source)}'}), (b {id: '${cyEscape(e.target)}'}) MERGE (a)-[r:${rel}]->(b)${set};`)
   }
   return lines.join('\n') + '\n'
 }

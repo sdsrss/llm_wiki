@@ -50,8 +50,8 @@ test('toCypher escapes quotes and emits MERGE statements', (t) => {
   const cy = toCypher(loadGraph(d))
   assert.ok(cy.includes("MERGE (n:Source {id: 'sources/doc'})"))
   assert.ok(cy.includes("It\\'s a thing"))
-  assert.ok(cy.includes('-[:WIKILINK]->'))
-  assert.ok(cy.includes('-[:SOURCE]->'))
+  assert.ok(cy.includes('-[r:WIKILINK]->'))
+  assert.ok(cy.includes('-[r:SOURCE]->'))
 })
 
 test('exportGraph writes the requested format and rejects unknown formats', (t) => {
@@ -86,4 +86,21 @@ test('exportGraph html format writes graph.html', (t) => {
   const r = exportGraph(d, { format: 'html' })
   assert.ok(r.out.endsWith('graph.html'))
   assert.ok(fs.readFileSync(r.out, 'utf8').includes('<canvas'))
+})
+
+test('exports carry edge confidence: GraphML d4 key, Cypher relationship property', () => {
+  const graph = {
+    nodes: [{ id: 'a', type: 'entity', title: 'A' }, { id: 'b', type: 'entity', title: 'B' }],
+    edges: [
+      { source: 'a', target: 'b', type: 'implements', confidence: 'inferred' },
+      { source: 'b', target: 'a', type: 'wikilink' }, // legacy edge without confidence
+    ],
+  }
+  const xml = toGraphML(graph)
+  assert.match(xml, /<key id="d4" for="edge" attr\.name="confidence" attr\.type="string"\/>/)
+  assert.match(xml, /<data key="d3">implements<\/data><data key="d4">inferred<\/data>/)
+  assert.ok(!/e1[^]*key="d4"/.test(xml.split('\n').find(l => l.includes('id="e1"'))), 'no d4 data on the edge without confidence')
+  const cy = toCypher(graph)
+  assert.ok(cy.includes("MERGE (a)-[r:IMPLEMENTS]->(b) SET r.confidence = 'inferred';"))
+  assert.ok(cy.includes('MERGE (a)-[r:WIKILINK]->(b);'), 'no SET clause without confidence')
 })

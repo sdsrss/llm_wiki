@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { loadKbConfig } from './templates.mjs'
-import { listWikiPages, isInvalidated } from './pages.mjs'
+import { listWikiPages, isInvalidated, RELATION_CONFIDENCES } from './pages.mjs'
 
 const WIKILINK_RE = /\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g
 
@@ -77,11 +77,24 @@ export function buildIndex(kbRoot) {
   for (const pg of pages) {
     const id = pg.relPath.replace(/\.md$/, '')
     for (const target of extractWikilinks(pg.body)) {
-      if (ids.has(target)) edges.push({ source: id, target, type: 'wikilink' })
+      if (ids.has(target)) edges.push({ source: id, target, type: 'wikilink', confidence: 'inferred' })
     }
-    for (const src of pg.data.sources ?? []) edges.push({ source: id, target: String(src), type: 'source' })
+    for (const src of pg.data.sources ?? []) edges.push({ source: id, target: String(src), type: 'source', confidence: 'extracted' })
     if (pg.data.superseded_by && ids.has(String(pg.data.superseded_by))) {
-      edges.push({ source: id, target: String(pg.data.superseded_by), type: 'superseded_by' })
+      edges.push({ source: id, target: String(pg.data.superseded_by), type: 'superseded_by', confidence: 'extracted' })
+    }
+    // Typed relations from frontmatter (channel B: agent judgments). Malformed or
+    // dangling entries are skipped silently here — lint owns reporting them.
+    const seenRel = new Set()
+    for (const rel of Array.isArray(pg.data.relations) ? pg.data.relations : []) {
+      if (!rel || typeof rel !== 'object' || !rel.to || !rel.type) continue
+      const target = String(rel.to).replace(/\.md$/, '')
+      if (!ids.has(target)) continue
+      const key = `${target} ${rel.type}`
+      if (seenRel.has(key)) continue
+      seenRel.add(key)
+      const confidence = RELATION_CONFIDENCES.includes(rel.confidence) ? rel.confidence : 'inferred'
+      edges.push({ source: id, target, type: String(rel.type), confidence })
     }
   }
   fs.writeFileSync(p.graphJson, JSON.stringify({ nodes, edges }, null, 2) + '\n')
