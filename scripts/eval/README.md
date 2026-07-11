@@ -32,6 +32,20 @@ with edges; it is an experiment (degree-prior third RRF signal) that lives only
 in this harness.
 Measured 2026-07-11 on ./kb (24 probes, k=5): graph Recall@5 0.938 vs hybrid 0.979 with an xlang regression (0.833 vs 1.000) — negative result, not promoted to `ask`.
 
+Weighted-RRF / vector-first experiment (2026-07-11, offline recombination of
+the same bm25 + vector rankings; weighted RRF = `w/(60+rank+1)` on the vector
+list with bm25 weight 1; vector-first = vector ranking then unseen bm25 hits;
+k=5, three tiers, 46 probes): no arm dominates standard RRF. On ./kb, every
+vector-weighted arm trades recall for MRR (hybrid 0.979/0.769 vs wrrf-w2
+0.958/0.833 vs vector-first 0.958/0.927) — the lost probe is a two-page zh
+paraphrase where bm25's unique contribution gets crowded out of top-5. On
+kb-50, wrrf w=1.5–2 is a mild Pareto gain (MRR 0.900→0.950); on kb-150 all
+fused arms tie (1.000/0.933–0.938). Since `ask` consumes the whole top-k,
+recall@k is the answer-quality metric and MRR only orders budget drops —
+standard RRF keeps the best recall everywhere, so it stays. If a k=1 /
+first-hit UI ever appears, vector-first is the candidate (pooled xlang MRR
+0.714→0.904, same recall).
+
     node scripts/eval/answer-eval.mjs --kb ./kb --arms bm25,hybrid --judge-model <model>
 
 Runs `askKb` per arm, then: abstention rate on `none` probes (higher = honest),
