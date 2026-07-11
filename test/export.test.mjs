@@ -153,6 +153,17 @@ test('exportMarkdownPages marker-guards a clean re-export and refuses foreign no
   assert.ok(fs.existsSync(path.join(stray, 'keep.md')), 'foreign file left untouched')
 })
 
+test('export marker carries provenance and --out pointing at a file errors clearly', (t) => {
+  const d = seedKb(t)
+  exportMarkdownPages(d, {})
+  const marker = JSON.parse(fs.readFileSync(path.join(d, 'wiki-md/.llm-wiki-export'), 'utf8'))
+  assert.equal(marker.tool, '@sdsrs/llm-wiki')
+  assert.ok(marker.version)
+  const f = path.join(d, 'somefile')
+  fs.writeFileSync(f, 'x')
+  assert.throws(() => exportMarkdownPages(d, { out: f }), /--out must be a directory/)
+})
+
 test('exportMarkdownPages refuses --out pointing at the KB root or managed layers', (t) => {
   const d = seedKb(t)
   assert.throws(() => exportMarkdownPages(d, { out: path.join(d, 'raw') }), /managed layers/, 'refuses the immutable raw/ layer')

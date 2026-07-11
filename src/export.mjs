@@ -3,6 +3,8 @@ import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { listWikiPages } from './pages.mjs'
 
+const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+
 const xmlEscape = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&apos;')
@@ -63,6 +65,9 @@ export function exportMarkdownPages(kbRoot, { out } = {}) {
   if (forbidden.includes(outDir)) {
     throw new Error(`refusing to export into the KB's managed layers (${path.relative(kbRoot, outDir) || '.'}) — pass a dedicated --out directory`)
   }
+  if (fs.existsSync(outDir) && !fs.statSync(outDir).isDirectory()) {
+    throw new Error(`--out must be a directory, got a file: ${outDir}`)
+  }
   const marker = path.join(outDir, EXPORT_MARKER)
   if (fs.existsSync(outDir)) {
     if (fs.existsSync(marker)) fs.rmSync(outDir, { recursive: true, force: true })
@@ -71,7 +76,7 @@ export function exportMarkdownPages(kbRoot, { out } = {}) {
     }
   }
   fs.mkdirSync(outDir, { recursive: true })
-  fs.writeFileSync(marker, '')
+  fs.writeFileSync(marker, JSON.stringify({ tool: '@sdsrs/llm-wiki', version: pkg.version }) + '\n')
   let pageCount = 0
   const writeConverted = (srcAbs, relPath) => {
     const dest = path.join(outDir, relPath)

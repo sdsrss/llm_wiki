@@ -23,7 +23,13 @@ export function vectorStorePath(kbRoot) {
 export function loadVectorStore(kbRoot) {
   const f = vectorStorePath(kbRoot)
   if (!fs.existsSync(f)) return null
-  const s = readJsonFile(f)
+  let s
+  try { s = readJsonFile(f) } catch (err) {
+    // Fail open: a corrupt derived store must never take down `ask` — vector
+    // location silently degrades to BM25 (mem #10032 posture).
+    process.stderr.write(`warning: ignoring corrupt vector store (${err.message}) — run \`llm-wiki embed\` to rebuild\n`)
+    return null
+  }
   return (s && typeof s.pages === 'object') ? s : null
 }
 

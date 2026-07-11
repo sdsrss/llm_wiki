@@ -106,3 +106,19 @@ test('embedKb is incremental: reuses unchanged, prunes removed/invalidated, re-e
   assert.equal(r4.embedded, 1) // only a.md is valid now
   assert.equal(loadVectorStore(d).model, 'emb-2')
 })
+
+test('embedKb counts only pages actually stored: zero-vector page is skipped, not counted', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  seedPage(d, 'sources/a.md', 'A', 'alpha body')
+  seedPage(d, 'sources/z.md', 'Z', 'zero body')
+  setCfg(t, d, CFG)
+  // Z embeds to a pathological all-zeros vector (normalize -> null): the page
+  // must stay BM25-only and NOT inflate the embedded count.
+  const f = fakeEmbed(text => text.includes('zero body') ? [0, 0] : [1, 0])
+  const r = await embedKb(d, { fetchImpl: f.fetchImpl })
+  assert.equal(r.embedded, 1)
+  const store = loadVectorStore(d)
+  assert.ok(store.pages['sources/a.md'])
+  assert.equal(store.pages['sources/z.md'], undefined)
+})

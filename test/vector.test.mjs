@@ -39,6 +39,12 @@ test('loadVectorStore returns null when the sidecar is missing', (t) => {
   assert.equal(loadVectorStore(d), null)
 })
 
+test('loadVectorStore fails open (null) on corrupt JSON instead of throwing', (t) => {
+  const d = tmp(t)
+  fs.writeFileSync(vectorStorePath(d), '{ corrupt not json')
+  assert.equal(loadVectorStore(d), null)
+})
+
 test('cosineTopK ranks by dot product, filters non-positive, slices k, skips dim mismatch', () => {
   const store = { model: 'm', dim: 2, pages: {
     'a.md': { hash: 'h', vec: [1, 0] },

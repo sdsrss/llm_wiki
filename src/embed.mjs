@@ -41,6 +41,7 @@ export async function embedKb(kbRoot, { fetchImpl } = {}) {
     jobs.push({ relPath: pg.relPath, text, hash })
   }
   let dim = (prev && prev.model === cfg.embeddingModel) ? prev.dim : null
+  let embedded = 0
   if (jobs.length > 0) {
     const t = fetchImpl ? { fetchImpl, dispatcher: undefined } : await makeTransport()
     for (let i = 0; i < jobs.length; i += BATCH) {
@@ -52,11 +53,12 @@ export async function embedKb(kbRoot, { fetchImpl } = {}) {
         if (dim === null) dim = n.length
         if (n.length !== dim) throw new Error(`Embedding dimension changed mid-run (${dim} -> ${n.length})`)
         nextPages[j.relPath] = { hash: j.hash, vec: n }
+        embedded++
       })
     }
   }
   const pruned = prev ? Object.keys(prev.pages).filter(id => !(id in nextPages)).length : 0
   const store = { model: cfg.embeddingModel, dim: dim ?? 0, pages: nextPages }
   saveVectorStore(kbRoot, store)
-  return { embedded: jobs.length, reused, pruned, model: cfg.embeddingModel, dim: store.dim }
+  return { embedded, reused, pruned, model: cfg.embeddingModel, dim: store.dim }
 }

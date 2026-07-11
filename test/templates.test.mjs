@@ -62,6 +62,12 @@ test('agentsMdTemplate documents typed relations with the configured vocabulary'
   assert.match(md, /extracted \| inferred \| ambiguous/)
 })
 
+test('agentsMdTemplate wiki-layer line harmonizes review with the hand-edit exception', () => {
+  const md = agentsMdTemplate(DEFAULT_CONFIG)
+  assert.match(md, /Humans review — and may occasionally hand-edit/)
+  assert.doesNotMatch(md, /Humans only review/)
+})
+
 test('agentsMdTemplate documents aliases and the Obsidian browse-and-annotate convention', () => {
   const md = agentsMdTemplate(DEFAULT_CONFIG)
   assert.match(md, /Optional frontmatter: aliases/)
