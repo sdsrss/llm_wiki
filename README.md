@@ -108,6 +108,10 @@ dispersed wiki tags) and suggests splitting — one KB per domain.
 
 ### Operational envelope
 
+**Platform: macOS / Linux (POSIX).** Path handling assumes POSIX separators;
+Windows is unsupported (`npm install` is blocked there via the package `os`
+field). Node ≥ 22.19.
+
 llm-wiki targets **single-user, single-domain KBs at the hundreds-of-pages
 scale**. Within that envelope everything is in-memory and re-read per operation
 (no persistent index); there is no locking, so **do not run two writers against

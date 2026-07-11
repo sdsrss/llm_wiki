@@ -1,6 +1,6 @@
 {
   "name": "@sdsrs/llm-wiki",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "description": "Compile messy document directories into Karpathy-style llm_wiki knowledge bases — standalone Q&A CLI + Claude Code/Codex skills",
   "directories": {
     "test": "test"
@@ -37,6 +37,9 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "os": [
+    "!win32"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@mozilla/readability": "^0.6.0",

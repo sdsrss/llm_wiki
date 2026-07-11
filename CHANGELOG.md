@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.7 (2026-07-11)
+
+Contract/skill clarifications, an env-var convenience, and an explicit platform
+declaration. Suite 208 → 210.
+
+- **Platform: macOS / Linux only.** The path handling assumes POSIX separators, so
+  Windows is now declared unsupported via the package `os` field (`npm install`
+  will refuse it on `win32`) — it never worked there. No change for macOS/Linux
+  users.
+- **fix(config): `LLM_WIKI_API_KEY` alone is now a complete config.** Setting just
+  that env var (no `OPENAI_API_KEY`/provider key) bootstraps the first builtin
+  provider instead of erroring "No LLM configured".
+- **docs(AGENTS.md): the ingest contract now covers `wiki/hot.md`** — a ~500-char
+  snapshot of what the KB covers, refreshed on ingest (it was scaffolded and read
+  by the query flow but never named in the contract, so contract-only agents left
+  it to go stale). Applies to newly `init`-ed KBs.
+- **docs(wiki-lint skill): separated the manual `confidence: ambiguous` review pass
+  from the three `lint`-emitted semantic tasks** (they were under one heading,
+  reading as if `lint` produced all four).
+
 ## 0.6.6 (2026-07-11)
 
 Audit remediation batch (roadmap M2 complete + M3/M4). No breaking changes, no KB
