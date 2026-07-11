@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { initKb } from '../src/init.mjs'
 import { scanSource, estimateTokens } from '../src/scanner.mjs'
 
@@ -99,4 +100,83 @@ test('scanSource persist:false computes the report without writing the plan file
   const r = await scanSource(src, kb, { persist: false })
   assert.equal(r.files.length, 1)
   assert.ok(!fs.existsSync(path.join(kb, '.scan-plan.json')))
+})
+
+const BIN = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'bin', 'llm-wiki.mjs')
+
+function writePage(kb, rel, tags, extra = '') {
+  const abs = path.join(kb, 'wiki', rel)
+  fs.mkdirSync(path.dirname(abs), { recursive: true })
+  fs.writeFileSync(abs, `---\ntype: concept\ntitle: ${path.basename(rel, '.md')}\ndescription: d\ntags: [${tags.join(', ')}]\ncreated: 2026-07-11\nupdated: 2026-07-11\n${extra}---\n\nbody\n`)
+}
+
+function writeMixedLangSrc(src) {
+  for (let i = 0; i < 5; i++) {
+    fs.writeFileSync(path.join(src, `zh${i}.md`), `# 中文${i}\n` + Array.from({ length: 10 }, (_, j) => `第${i}篇第${j}句中文正文内容。`).join(''))
+    fs.writeFileSync(path.join(src, `en${i}.md`), `# En${i}\n` + Array.from({ length: 10 }, (_, j) => `english file ${i} sentence ${j} body text. `).join(''))
+  }
+}
+
+test('scanSource: domainMixture flags mixed-language source, not a stray minority file', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  writeMixedLangSrc(src)
+  const r = await scanSource(src, kb, {})
+  assert.equal(r.domainMixture.language.zh, 5)
+  assert.equal(r.domainMixture.language.en, 5)
+  assert.equal(r.domainMixture.language.flagged, true)
+  assert.equal(r.domainMixture.flagged, true)
+
+  const src2 = tmp(t), kb2 = tmp(t)
+  initKb(kb2)
+  for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(src2, `zh${i}.md`), `# 中文${i}\n` + Array.from({ length: 10 }, (_, j) => `纯中文库第${i}篇第${j}句正文。`).join(''))
+  fs.writeFileSync(path.join(src2, 'en0.md'), '# En\na single stray english file body text here')
+  const r2 = await scanSource(src2, kb2, {})
+  assert.equal(r2.domainMixture.language.flagged, false, 'minority of 1 file is below LANG_MIX_MIN_FILES')
+  assert.equal(r2.domainMixture.flagged, false)
+})
+
+test('scanSource: domainMixture tag dispersion — >=10 tagged pages, low top-tag coverage, invalidated excluded', async (t) => {
+  const src = tmp(t)
+  fs.writeFileSync(path.join(src, 'a.md'), '# A\nsome plain body content here')
+
+  const kb = tmp(t)
+  initKb(kb)
+  for (let i = 0; i < 12; i++) writePage(kb, `concepts/p${i}.md`, [`topic-${i}`])
+  const r = await scanSource(src, kb, {})
+  assert.equal(r.domainMixture.tags.pages, 12)
+  assert.equal(r.domainMixture.tags.distinct, 12)
+  assert.equal(r.domainMixture.tags.flagged, true)
+  assert.equal(r.domainMixture.flagged, true)
+
+  const kb2 = tmp(t)
+  initKb(kb2)
+  for (let i = 0; i < 12; i++) writePage(kb2, `concepts/p${i}.md`, ['shared', `topic-${i}`])
+  const r2 = await scanSource(src, kb2, {})
+  assert.equal(r2.domainMixture.tags.flagged, false, 'a tag shared by all pages means cohesive')
+  assert.equal(r2.domainMixture.flagged, false)
+
+  const kb3 = tmp(t)
+  initKb(kb3)
+  for (let i = 0; i < 9; i++) writePage(kb3, `concepts/p${i}.md`, [`topic-${i}`])
+  writePage(kb3, 'concepts/dead.md', ['topic-dead'], 'status: invalidated\n')
+  const r3 = await scanSource(src, kb3, {})
+  assert.equal(r3.domainMixture.tags, null, 'invalidated page does not count toward the 10-page floor')
+})
+
+test('scan CLI prints multi-domain warning when flagged, nothing when clean', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  writeMixedLangSrc(src)
+  const r = spawnSync(process.execPath, [BIN, 'scan', src, '--kb', kb], { encoding: 'utf8' })
+  assert.equal(r.status, 0)
+  assert.match(r.stdout, /mixed-language source \(zh 5 \/ en 5 files\)/)
+  assert.match(r.stdout, /one domain per KB/)
+
+  const src2 = tmp(t), kb2 = tmp(t)
+  initKb(kb2)
+  fs.writeFileSync(path.join(src2, 'a.md'), '# A\nplain single language body content')
+  const r2 = spawnSync(process.execPath, [BIN, 'scan', src2, '--kb', kb2], { encoding: 'utf8' })
+  assert.equal(r2.status, 0)
+  assert.ok(!r2.stdout.includes('warning:'), 'clean scan prints no domain warning')
 })

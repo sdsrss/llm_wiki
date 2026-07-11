@@ -21,7 +21,9 @@ npx @sdsrs/llm-wiki ask "what did we decide about X?"
 
 `scan` + `convert` fill `raw/`. The `wiki/` pages themselves are written by an
 agent running the **wiki-build** skill against `AGENTS.md` (the KB contract) — the
-CLI does not call an LLM to build pages, only to `ask`.
+CLI does not call an LLM to build pages, only to `ask`. Scan also warns when the
+source looks multi-domain (mixed-language files or dispersed wiki tags) and
+suggests splitting — one KB per domain.
 
 ## Commands
 

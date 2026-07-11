@@ -5,9 +5,39 @@ import { loadKbConfig } from './templates.mjs'
 import { SUPPORTED_EXTS } from './convert.mjs'
 import { sha256File, minhashSignature, jaccardEstimate } from './hashing.mjs'
 import { loadManifest, diffManifest } from './manifest.mjs'
+import { listWikiPages, isInvalidated } from './pages.mjs'
 
 const TEXT_EXTS = ['.md', '.markdown', '.txt', '.html', '.htm']
 const NEAR_DUP_THRESHOLD = 0.85
+const LANG_MIX_MIN_FILES = 3
+const LANG_MIX_MINORITY_SHARE = 0.25
+const TAG_MIN_PAGES = 10
+const TAG_TOP_SHARE_MIN = 0.3
+
+// Advisory guardrail for the one-KB-per-domain rule, from signals scan already
+// has: language mix across scanned text files, and tag dispersion across the
+// built wiki (a cohesive KB has at least one tag most pages share). No LLM,
+// no network; nothing blocks on it.
+function detectDomainMixture(files, kbRoot) {
+  const zh = files.filter(f => f.lang === 'zh').length
+  const en = files.filter(f => f.lang === 'en').length
+  const minority = Math.min(zh, en)
+  const language = {
+    zh,
+    en,
+    flagged: minority >= LANG_MIX_MIN_FILES && minority / (zh + en) >= LANG_MIX_MINORITY_SHARE,
+  }
+  let tags = null
+  const pages = listWikiPages(kbRoot).filter(p =>
+    !p.error && !isInvalidated(p) && Array.isArray(p.data.tags) && p.data.tags.length > 0)
+  if (pages.length >= TAG_MIN_PAGES) {
+    const counts = new Map()
+    for (const p of pages) for (const t of new Set(p.data.tags)) counts.set(t, (counts.get(t) ?? 0) + 1)
+    const topShare = Math.max(...counts.values()) / pages.length
+    tags = { pages: pages.length, distinct: counts.size, topShare: Number(topShare.toFixed(2)), flagged: topShare < TAG_TOP_SHARE_MIN }
+  }
+  return { language, tags, flagged: language.flagged || (tags?.flagged ?? false) }
+}
 
 export function estimateTokens(text) {
   let cjk = 0
@@ -103,6 +133,7 @@ export async function scanSource(srcDir, kbRoot, { exclude = [], persist = true 
     skipped,
     duplicates: { exact, near },
     incremental: { added: diff.added.length, changed: diff.changed.length, removed: diff.removed.length, unchanged: diff.unchanged.length },
+    domainMixture: detectDomainMixture(files, kbRoot),
     batches,
     estimate,
   }
