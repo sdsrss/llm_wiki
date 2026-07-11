@@ -4,10 +4,14 @@ import path from 'node:path'
 export const SUPPORTED_EXTS = ['.md', '.markdown', '.txt', '.html', '.htm', '.pdf', '.docx']
 
 export function slugify(name) {
-  return name.toLowerCase()
+  const slug = name.toLowerCase()
     .replace(/\.[a-z0-9]+$/i, '')
     .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
+  // A basename made entirely of emoji/symbols slugs to '' → a hidden `raw/.md`
+  // dotfile that `status` skips (source silently dropped). Never return empty;
+  // the caller's -N collision handler disambiguates untitled/untitled-2/…
+  return slug || 'untitled'
 }
 
 function titleFrom(markdown, fallback) {

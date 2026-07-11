@@ -32,6 +32,22 @@ test('runConvertPlan writes raw files and manifest; second scan shows unchanged'
   assert.equal(r2.batches.length, 0)
 })
 
+// ISSUE-005: emoji/symbol-only source names must produce visible, non-hidden
+// raw files (not `raw/.md`) so `status`/incremental tracking can see them.
+test('runConvertPlan: symbol-only source names yield visible non-dotfile raw files', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  fs.writeFileSync(path.join(src, '😀.md'), '# First\nalpha body '.repeat(10))
+  fs.writeFileSync(path.join(src, '___.md'), '# Second\nbeta body '.repeat(10))
+  await scanSource(src, kb, {})
+  const r = await runConvertPlan(kb)
+  assert.equal(r.converted.length, 2)
+  const rawFiles = fs.readdirSync(path.join(kb, 'raw')).filter(f => f !== '_originals')
+  assert.equal(rawFiles.length, 2, 'both sources produce distinct raw files')
+  assert.ok(rawFiles.every(f => !f.startsWith('.')), `no hidden dotfiles: ${rawFiles.join()}`)
+  assert.ok(rawFiles.every(f => !f.startsWith('-')), `no shell-hostile leading dash: ${rawFiles.join()}`)
+})
+
 test('failed conversions do not enter the manifest and retry on the next scan', async (t) => {
   const src = tmp(t), kb = tmp(t)
   initKb(kb)

@@ -11,6 +11,15 @@ function tmp(t) {
   return d
 }
 
+// ISSUE-005: an emoji/symbol-only basename slugged to '' → hidden `raw/.md`
+// that `status` skips (source silently dropped). slugify must never return ''.
+test('slugify never returns empty (symbol/emoji-only names fall back to untitled)', () => {
+  assert.equal(slugify('😀.md'), 'untitled')
+  assert.equal(slugify('___.md'), 'untitled')
+  assert.equal(slugify('🎉🔥.md'), 'untitled')
+  assert.equal(slugify('文章.md'), '文章', 'real content still slugs normally')
+})
+
 test('slugify keeps CJK, normalizes separators', () => {
   assert.equal(slugify('LLM Wiki 构建手册: v1/final'), 'llm-wiki-构建手册-v1-final')
 })
