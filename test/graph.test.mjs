@@ -7,7 +7,7 @@ const G = {
   nodes: [
     { id: 'a', type: 'source', title: 'A' },
     { id: 'b', type: 'entity', title: 'B' },
-    { id: 'c', type: 'concept', title: 'C' },
+    { id: 'c', type: 'concept', title: 'C', status: 'invalidated' },
     { id: 'd', type: 'concept', title: 'D' },
     { id: 'e', type: 'source', title: 'E' },
     { id: 'raw/x.md', type: 'raw', title: 'x.md' },
@@ -55,4 +55,20 @@ test('hubs ranks by total degree, excludes raw nodes, respects top', () => {
   assert.deepEqual(r[0], { id: 'b', title: 'B', type: 'entity', degree: 4, in: 2, out: 2 })
   assert.equal(r.length, 2)
   assert.ok(!hubs(G).some(h => h.id === 'raw/x.md'), 'raw nodes are files, not pages — excluded')
+})
+
+test('graph queries surface node status and hubs guards dangling endpoints', () => {
+  const g = {
+    nodes: G.nodes,
+    edges: [...G.edges, { source: 'ghost', target: 'b', type: 'wikilink' }], // dangling endpoint
+  }
+  const n = neighborhood(g, 'b', 1)
+  assert.equal(n.find(x => x.id === 'c').status, 'invalidated')
+  assert.equal(n.find(x => x.id === 'a').status, undefined)
+  const p = shortestPath(g, 'a', 'c')
+  assert.equal(p.hops[1].status, 'invalidated')
+  const h = hubs(g)
+  assert.equal(h.find(x => x.id === 'c').status, 'invalidated')
+  assert.ok(!h.some(x => x.id === 'ghost'), 'dangling endpoint contributes no hub')
+  assert.equal(h.find(x => x.id === 'b').in, 2, "dangling edge does not inflate b's in-degree")
 })

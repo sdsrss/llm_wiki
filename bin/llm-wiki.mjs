@@ -147,7 +147,7 @@ graphCmd.command('path <from> <to>')
     const r = shortestPath(loadGraph(opts.kb), from, to)
     if (!r) { console.log(`no path between ${from} and ${to}`); return }
     console.log(r.nodes[0])
-    for (const h of r.hops) console.log(`  ${h.dir === 'out' ? `-[${h.type}]->` : `<-[${h.type}]-`} ${h.to}${h.confidence ? `  (${h.confidence})` : ''}`)
+    for (const h of r.hops) console.log(`  ${h.dir === 'out' ? `-[${h.type}]->` : `<-[${h.type}]-`} ${h.to}${h.confidence ? `  (${h.confidence})` : ''}${h.status === 'invalidated' ? '  ⚠ invalidated' : ''}`)
   })
 
 graphCmd.command('neighbors <id>')
@@ -159,7 +159,7 @@ graphCmd.command('neighbors <id>')
     if (!Number.isFinite(depth) || depth < 1) { console.error(`invalid depth: ${opts.depth} (expected a positive integer)`); process.exit(1) }
     const r = neighborhood(loadGraph(opts.kb), id, depth)
     if (!r.length) { console.log(`${id} has no linked neighbors`); return }
-    for (const n of r) console.log(`d=${n.distance}  ${n.id}  [${n.type}${n.confidence ? '/' + n.confidence : ''} ${n.dir}]`)
+    for (const n of r) console.log(`d=${n.distance}  ${n.id}  [${n.type}${n.confidence ? '/' + n.confidence : ''} ${n.dir}]${n.status === 'invalidated' ? '  ⚠ invalidated' : ''}`)
   })
 
 graphCmd.command('hubs')
@@ -170,7 +170,7 @@ graphCmd.command('hubs')
     const top = Number.parseInt(opts.top, 10)
     if (!Number.isFinite(top) || top < 1) { console.error(`invalid --top: ${opts.top} (expected a positive integer)`); process.exit(1) }
     for (const h of hubs(loadGraph(opts.kb), { top })) {
-      console.log(`${String(h.degree).padStart(3)}  ${h.id}  (in ${h.in} / out ${h.out})  ${h.title}`)
+      console.log(`${String(h.degree).padStart(3)}  ${h.id}  (in ${h.in} / out ${h.out})  ${h.title}${h.status === 'invalidated' ? '  ⚠ invalidated' : ''}`)
     }
   })
 

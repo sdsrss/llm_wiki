@@ -218,3 +218,28 @@ test('wiki_graph errors with guidance when graph.json is missing', async (t) => 
   assert.equal(r.isError, true)
   assert.match(r.content[0].text, /llm-wiki index/)
 })
+
+test('wiki_graph marks invalidated nodes in neighbors and hubs output', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const client = await connectClient(t, d)
+  const r = await client.callTool({ name: 'wiki_graph', arguments: { op: 'neighbors', id: 'sources/karpathy-gist' } })
+  assert.match(r.content[0].text, /concepts\/old-idea.*⚠ invalidated/)
+  const h = await client.callTool({ name: 'wiki_graph', arguments: { op: 'hubs' } })
+  assert.match(h.content[0].text, /old-idea.*⚠ invalidated/)
+})
+
+test('wiki_graph leaf branches: no path and no neighbors return guidance, not errors', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const client = await connectClient(t, d)
+  fs.writeFileSync(path.join(d, 'wiki/entities/island.md'),
+    `---\ntype: entity\ntitle: Island\ndescription: isolated\ntags: [x]\nsources: []\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nno links`)
+  buildIndex(d)
+  const p = await client.callTool({ name: 'wiki_graph', arguments: { op: 'path', from: 'entities/island', to: 'sources/karpathy-gist' } })
+  assert.equal(p.isError ?? false, false)
+  assert.match(p.content[0].text, /No link path/)
+  const n = await client.callTool({ name: 'wiki_graph', arguments: { op: 'neighbors', id: 'entities/island' } })
+  assert.equal(n.isError ?? false, false)
+  assert.match(n.content[0].text, /no linked neighbors/)
+})

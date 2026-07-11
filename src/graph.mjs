@@ -17,11 +17,15 @@ function assertNode(adj, id) {
   if (!adj.has(id)) throw new Error(`unknown node: ${id} (page ids come from graph.json — rerun \`llm-wiki index\` if it is stale)`)
 }
 
+// Map of node id -> status, only for nodes that carry one (e.g. 'invalidated').
+const statusOf = (graph) => new Map(graph.nodes.filter(n => n.status).map(n => [n.id, n.status]))
+
 export function shortestPath(graph, from, to) {
   const adj = buildAdjacency(graph)
   assertNode(adj, from)
   assertNode(adj, to)
   if (from === to) return { nodes: [from], hops: [] }
+  const st = statusOf(graph)
   const prev = new Map([[from, null]])
   const queue = [from]
   while (queue.length) {
@@ -33,7 +37,7 @@ export function shortestPath(graph, from, to) {
         const hops = []
         for (let at = to; prev.get(at); at = prev.get(at).id) {
           const { id, via } = prev.get(at)
-          hops.unshift({ from: id, to: at, type: via.type, confidence: via.confidence, dir: via.dir })
+          hops.unshift({ from: id, to: at, type: via.type, confidence: via.confidence, dir: via.dir, ...(st.get(at) ? { status: st.get(at) } : {}) })
         }
         return { nodes: [from, ...hops.map(h => h.to)], hops }
       }
@@ -46,6 +50,7 @@ export function shortestPath(graph, from, to) {
 export function neighborhood(graph, id, depth = 1) {
   const adj = buildAdjacency(graph)
   assertNode(adj, id)
+  const st = statusOf(graph)
   const seen = new Set([id])
   const out = []
   let frontier = [id]
@@ -55,7 +60,7 @@ export function neighborhood(graph, id, depth = 1) {
       for (const nb of adj.get(cur)) {
         if (seen.has(nb.id)) continue
         seen.add(nb.id)
-        out.push({ id: nb.id, distance: d, type: nb.type, confidence: nb.confidence, dir: nb.dir })
+        out.push({ id: nb.id, distance: d, type: nb.type, confidence: nb.confidence, dir: nb.dir, ...(st.get(nb.id) ? { status: st.get(nb.id) } : {}) })
         next.push(nb.id)
       }
     }
@@ -71,14 +76,15 @@ export function hubs(graph, { top = 10 } = {}) {
     cur[key]++
     deg.set(id, cur)
   }
+  const byId = new Map(graph.nodes.map(n => [n.id, n]))
   for (const e of graph.edges) {
+    if (!byId.has(e.source) || !byId.has(e.target)) continue // dangling endpoint: not a real page
     bump(e.source, 'out')
     bump(e.target, 'in')
   }
-  const byId = new Map(graph.nodes.map(n => [n.id, n]))
   return [...deg.entries()]
     .filter(([id]) => byId.get(id) && byId.get(id).type !== 'raw')
-    .map(([id, d]) => ({ id, title: byId.get(id).title ?? '', type: byId.get(id).type ?? '', degree: d.in + d.out, in: d.in, out: d.out }))
+    .map(([id, d]) => ({ id, title: byId.get(id).title ?? '', type: byId.get(id).type ?? '', degree: d.in + d.out, in: d.in, out: d.out, ...(byId.get(id).status ? { status: byId.get(id).status } : {}) }))
     .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id))
     .slice(0, top)
 }

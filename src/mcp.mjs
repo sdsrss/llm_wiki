@@ -102,18 +102,18 @@ export function createMcpServer(kbRoot, { fetchImpl } = {}) {
         if (!from || !to) return errorResult('op "path" needs both `from` and `to` page ids.')
         const r = shortestPath(graph, from, to)
         if (!r) return textResult(`No link path between ${from} and ${to}.`)
-        const lines = [r.nodes[0], ...r.hops.map(h => `  ${h.dir === 'out' ? `-[${h.type}]->` : `<-[${h.type}]-`} ${h.to}${h.confidence ? `  (${h.confidence})` : ''}`)]
+        const lines = [r.nodes[0], ...r.hops.map(h => `  ${h.dir === 'out' ? `-[${h.type}]->` : `<-[${h.type}]-`} ${h.to}${h.confidence ? `  (${h.confidence})` : ''}${h.status === 'invalidated' ? '  ⚠ invalidated' : ''}`)]
         return textResult(`${DATA_NOTICE}\n\n${lines.join('\n')}`)
       }
       if (op === 'neighbors') {
         if (!id) return errorResult('op "neighbors" needs `id`.')
         const r = neighborhood(graph, id, depth)
         if (!r.length) return textResult(`${id} has no linked neighbors.`)
-        return textResult(`${DATA_NOTICE}\n\n${r.map(n => `d=${n.distance}  ${n.id}  [${n.type}${n.confidence ? '/' + n.confidence : ''} ${n.dir}]`).join('\n')}`)
+        return textResult(`${DATA_NOTICE}\n\n${r.map(n => `d=${n.distance}  ${n.id}  [${n.type}${n.confidence ? '/' + n.confidence : ''} ${n.dir}]${n.status === 'invalidated' ? '  ⚠ invalidated' : ''}`).join('\n')}`)
       }
       const r = hubs(graph, { top })
       if (!r.length) return textResult('The graph has no page nodes yet.')
-      return textResult(`${DATA_NOTICE}\n\n${r.map(h => `${h.degree}  ${h.id}  (in ${h.in} / out ${h.out})  ${h.title}`).join('\n')}`)
+      return textResult(`${DATA_NOTICE}\n\n${r.map(h => `${h.degree}  ${h.id}  (in ${h.in} / out ${h.out})  ${h.title}${h.status === 'invalidated' ? '  ⚠ invalidated' : ''}`).join('\n')}`)
     } catch (err) {
       return errorResult(err.message) // unknown node ids from shortestPath/neighborhood
     }
