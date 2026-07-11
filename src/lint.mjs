@@ -40,6 +40,7 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
       mechanical.push({ rule: 'invalid-relation-entry', path: pg.relPath, detail: 'relations must be a YAML list' })
     }
     const relationTypes = Array.isArray(cfg.relationTypes) ? cfg.relationTypes : []
+    const seenRel = new Map()
     for (const rel of Array.isArray(pg.data.relations) ? pg.data.relations : []) {
       if (!rel || typeof rel !== 'object' || !rel.to || !rel.type) {
         mechanical.push({ rule: 'invalid-relation-entry', path: pg.relPath, detail: `expected {to, type[, confidence]}, got: ${JSON.stringify(rel)}` })
@@ -54,12 +55,22 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
       if (rel.confidence !== undefined && !RELATION_CONFIDENCES.includes(rel.confidence)) {
         mechanical.push({ rule: 'invalid-relation-confidence', path: pg.relPath, detail: `"${rel.confidence}" (expected ${RELATION_CONFIDENCES.join(' | ')})` })
       }
+      const key = `${target} ${rel.type}`
+      const first = seenRel.get(key)
+      if (first) {
+        const conflict = first.confidence !== rel.confidence
+          ? `, conflicting confidence "${first.confidence ?? 'inferred'}" vs "${rel.confidence ?? 'inferred'}"`
+          : ''
+        mechanical.push({ rule: 'duplicate-relation', path: pg.relPath, detail: `-> ${target} type "${rel.type}" duplicated (index keeps the first entry)${conflict}` })
+      } else {
+        seenRel.set(key, rel)
+      }
     }
   }
   for (const pg of pages) {
     if (pg.error) continue
     const id = pg.relPath.replace(/\.md$/, '')
-    if (pg.data.type !== 'source' && pg.data.type !== 'comparison' && !isInvalidated(pg) && !incoming.has(id)) mechanical.push({ rule: 'orphan-page', path: pg.relPath, detail: 'no incoming wikilinks' })
+    if (pg.data.type !== 'source' && pg.data.type !== 'comparison' && !isInvalidated(pg) && !incoming.has(id)) mechanical.push({ rule: 'orphan-page', path: pg.relPath, detail: 'no incoming wikilinks or relations' })
   }
 
   if (fs.existsSync(p.indexMd)) {
@@ -67,9 +78,11 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
     // user-added sections after Pending are not counted as pending concepts.
     const pendingSection = fs.readFileSync(p.indexMd, 'utf8').match(/## Pending concepts([\s\S]*?)(?=\n## |$)/)?.[1] ?? ''
     for (const line of pendingSection.split('\n')) {
-      // Dash flavors: em/en dash with optional space, or a space-delimited hyphen
-      // (`- foo - [[a]]`) — a bare `-` would stop inside hyphenated names like multi-agent.
-      const m = line.match(/^-\s*(.+?)(?:\s*[—–]|\s+-\s)/)
+      // Dash flavors: em/en dash separator requires a trailing space, or a
+      // space-delimited hyphen (`- foo - [[a]]`) — a bare `-` would stop inside
+      // hyphenated names like multi-agent, and a spaceless en-dash (`pages 1–2`)
+      // is part of the name, not a separator.
+      const m = line.match(/^-\s*(.+?)(?:\s*[—–]\s|\s+-\s)/)
       if (!m) continue
       const refs = (line.match(/\[\[/g) ?? []).length
       if (refs >= cfg.conceptThreshold) semantic.push({ task: 'promote-concepts', detail: `${m[1]} (${refs} sources)` })

@@ -18,16 +18,18 @@ export function estimateTokens(text) {
 // Symlinked directories are not followed (loop safety) but are recorded in
 // `skippedDirs` so they surface in the scan report instead of vanishing silently.
 // Symlinked files keep working: reads below follow the link as before.
-function* walk(dir, base = dir, skippedDirs = []) {
+function* walk(dir, base = dir, skippedDirs = [], exclude = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     if (e.name.startsWith('.') || e.name === 'node_modules') continue
     const abs = path.join(dir, e.name)
     if (e.isSymbolicLink()) {
+      const rel = path.relative(base, abs)
+      if (exclude.some(pat => rel.includes(pat))) { skippedDirs.push({ rel, reason: 'excluded' }); continue }
       let st
-      try { st = fs.statSync(abs) } catch { skippedDirs.push({ rel: path.relative(base, abs), reason: 'broken symlink' }); continue }
-      if (st.isDirectory()) { skippedDirs.push({ rel: path.relative(base, abs), reason: 'symlinked directory (not followed)' }); continue }
-      yield path.relative(base, abs)
-    } else if (e.isDirectory()) yield* walk(abs, base, skippedDirs)
+      try { st = fs.statSync(abs) } catch { skippedDirs.push({ rel, reason: 'broken symlink' }); continue }
+      if (st.isDirectory()) { skippedDirs.push({ rel, reason: 'symlinked directory (not followed)' }); continue }
+      yield rel
+    } else if (e.isDirectory()) yield* walk(abs, base, skippedDirs, exclude)
     else yield path.relative(base, abs)
   }
 }
@@ -38,7 +40,7 @@ export async function scanSource(srcDir, kbRoot, { exclude = [], persist = true 
   const cfg = loadKbConfig(kbRoot)
   const files = []
   const skipped = []
-  for (const rel of walk(srcDir, srcDir, skipped)) {
+  for (const rel of walk(srcDir, srcDir, skipped, exclude)) {
     if (exclude.some(pat => rel.includes(pat))) { skipped.push({ rel, reason: 'excluded' }); continue }
     const ext = path.extname(rel).toLowerCase()
     if (!SUPPORTED_EXTS.includes(ext)) { skipped.push({ rel, reason: `unsupported ${ext}` }); continue }

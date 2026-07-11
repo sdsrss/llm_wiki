@@ -70,6 +70,18 @@ test('scanSource --exclude skips matching paths with reason "excluded"', async (
   assert.deepEqual(excluded, ['drafts/wip.md', 'notes-draft.md'], 'substring match applies to the full relative path')
 })
 
+test('symlinked directory matching --exclude is labeled excluded, not symlinked', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  fs.mkdirSync(path.join(src, 'real-dir'))
+  fs.writeFileSync(path.join(src, 'real-dir/x.md'), 'x')
+  fs.writeFileSync(path.join(src, 'keep.md'), 'keep')
+  fs.symlinkSync(path.join(src, 'real-dir'), path.join(src, 'skipme'), 'dir')
+  const r = await scanSource(src, kb, { exclude: ['skipme'] })
+  const entry = r.skipped.find(s => s.rel === 'skipme')
+  assert.equal(entry?.reason, 'excluded')
+})
+
 test('scanSource: empty file gets lang en and zero tokens (no NaN path)', async (t) => {
   const src = tmp(t), kb = tmp(t)
   initKb(kb)

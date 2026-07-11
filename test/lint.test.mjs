@@ -307,6 +307,33 @@ test('lint tolerates a non-array relationTypes config override', async (t) => {
     'a non-array vocabulary reports every type as unknown instead of crashing')
 })
 
+test('lint flags duplicate relations (same to+type), noting conflicting confidence', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/sources/a.md'),
+    `---\ntype: source\ntitle: A\ndescription: d\ntags: [x]\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nbody [[concepts/b]]`)
+  fs.writeFileSync(path.join(d, 'wiki/concepts/b.md'),
+    `---\ntype: concept\ntitle: B\ndescription: d\ntags: [x]\nsources: [raw/a.md]\ncreated: 2026-07-01\nupdated: 2026-07-01\nrelations:\n  - to: sources/a\n    type: uses\n    confidence: inferred\n  - to: sources/a\n    type: uses\n    confidence: ambiguous\n---\n\nbody`)
+  fs.writeFileSync(path.join(d, 'raw/a.md'), 'raw')
+  const r = await lintKb(d)
+  const dup = r.mechanical.find(i => i.rule === 'duplicate-relation')
+  assert.ok(dup, 'duplicate to+type reported')
+  assert.match(dup.detail, /index keeps the first/)
+  assert.match(dup.detail, /inferred.*ambiguous|conflicting/, 'conflicting confidence values named')
+})
+
+test('lint promote-concepts tolerates en-dash inside concept names', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/sources/a.md'),
+    `---\ntype: source\ntitle: A\ndescription: d\ntags: [x]\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nbody`)
+  fs.appendFileSync(path.join(d, 'wiki/index.md'), '- pages 1–2 — [[sources/a]] [[sources/a]]\n')
+  const r = await lintKb(d)
+  const promo = r.semantic.find(s => s.task === 'promote-concepts')
+  assert.ok(promo)
+  assert.match(promo.detail, /^pages 1–2 /, 'name with en-dash captured whole, not truncated at the dash')
+})
+
 test('lintKb stale-scan skips invalidated pages', async (t) => {
   const d = tmp(t)
   initKb(d)
