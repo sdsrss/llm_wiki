@@ -33,8 +33,12 @@ function detectDomainMixture(files, kbRoot) {
   if (pages.length >= TAG_MIN_PAGES) {
     const counts = new Map()
     for (const p of pages) for (const t of new Set(p.data.tags)) counts.set(t, (counts.get(t) ?? 0) + 1)
-    const topShare = Math.max(...counts.values()) / pages.length
-    tags = { pages: pages.length, distinct: counts.size, topShare: Number(topShare.toFixed(2)), flagged: topShare < TAG_TOP_SHARE_MIN }
+    // Round once and flag on the rounded value so the stored/displayed share
+    // (CLI prints Math.round(topShare*100)) never reads "30%" while the strict
+    // `< TAG_TOP_SHARE_MIN` rule fired on a raw 0.29x. Effective threshold is
+    // 29.5%; negligible for an advisory heuristic, and flag/display now agree.
+    const topShare = Number((Math.max(...counts.values()) / pages.length).toFixed(2))
+    tags = { pages: pages.length, distinct: counts.size, topShare, flagged: topShare < TAG_TOP_SHARE_MIN }
   }
   return { language, tags, flagged: language.flagged || (tags?.flagged ?? false) }
 }

@@ -164,6 +164,23 @@ test('scanSource: domainMixture tag dispersion — >=10 tagged pages, low top-ta
   assert.equal(r3.domainMixture.tags, null, 'invalidated page does not count toward the 10-page floor')
 })
 
+test('scanSource: tag flag agrees with the displayed rounded share at the 30% boundary', async (t) => {
+  const src = tmp(t)
+  fs.writeFileSync(path.join(src, 'a.md'), '# A\nplain body content here')
+  // 8 of 27 pages share one tag: raw top-share 0.296 rounds to 0.30, which the
+  // CLI prints as "30%". The flag must agree with that display (rule is <30%),
+  // so it must NOT fire — a raw-value flag would have shown "covers 30%" while
+  // flagged, the inconsistency this guards against.
+  const kb = tmp(t)
+  initKb(kb)
+  for (let i = 0; i < 8; i++) writePage(kb, `concepts/s${i}.md`, ['shared'])
+  for (let i = 0; i < 19; i++) writePage(kb, `concepts/u${i}.md`, [`topic-${i}`])
+  const r = await scanSource(src, kb, {})
+  assert.equal(r.domainMixture.tags.pages, 27)
+  assert.equal(r.domainMixture.tags.topShare, 0.3, 'raw 8/27 = 0.296 stored rounded to 0.30')
+  assert.equal(r.domainMixture.tags.flagged, false, 'displays "30%" so must not flag under the <30% rule')
+})
+
 test('scan CLI prints multi-domain warning when flagged, nothing when clean', async (t) => {
   const src = tmp(t), kb = tmp(t)
   initKb(kb)

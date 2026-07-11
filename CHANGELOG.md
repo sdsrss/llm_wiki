@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.3 (2026-07-11)
+
+Two cosmetic fixes from an independent review of 0.6.0–0.6.2; no behavior
+change beyond the scan warning's rounding.
+
+- fix(scan): the tag-dispersion warning now flags on the same rounded top-tag
+  share it displays, so it can no longer print "top tag covers 30%" while
+  firing a "below 30%" rule. Effective threshold is 29.5% (was a raw 30% with
+  an inconsistent display); negligible for an advisory heuristic. Suite 178 →
+  179.
+- docs: note that the JSON Canvas map's `file` cards are vault-relative from the
+  KB root, so a canvas written outside the KB via `--out` won't resolve them in
+  Obsidian — open the canvas with the KB as its own vault.
+
 ## 0.6.2 (2026-07-11)
 
 No breaking changes, no KB migration, no default-behavior change — one additive

@@ -147,6 +147,9 @@ human to resolve.
 
 `export --format canvas` writes a JSON Canvas (`graph.canvas`) domain map —
 `file` cards laid out by page type that open as live notes in Obsidian Canvas.
+The card paths are vault-relative from the KB root, so open the canvas with the
+KB as its own vault; a canvas written outside the KB via `--out` won't resolve
+its cards.
 
 ### Skills (Claude Code / Codex)
 
