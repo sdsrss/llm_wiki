@@ -44,9 +44,9 @@ export async function convertFile(srcPath) {
       return { markdown: `# ${article.title || base}\n\n${md}`, title: article.title || base, warnings }
     }
     if (ext === '.pdf') {
-      const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default
-      const data = await pdfParse(fs.readFileSync(srcPath))
-      return { markdown: data.text, title: titleFrom(data.text, base), warnings }
+      const { PDFParse } = await import('pdf-parse')
+      const { text } = await new PDFParse({ data: fs.readFileSync(srcPath) }).getText()
+      return { markdown: text, title: titleFrom(text, base), warnings }
     }
     if (ext === '.docx') {
       const mammoth = await import('mammoth')

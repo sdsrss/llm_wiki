@@ -55,6 +55,16 @@ test('docx branch: extracts text via mammoth', async () => {
   assert.equal(r.warnings.length, 0)
 })
 
+// ISSUE-003: PDF conversion was 100% broken (v1 `pdf-parse/lib/pdf-parse.js`
+// subpath import against pdf-parse v2). This POSITIVE test proves the v2 API
+// actually extracts text — the old broken.pdf-only test masked the import failure.
+test('pdf branch: extracts text via pdf-parse (real fixture)', async () => {
+  const fixture = path.resolve(path.dirname(new URL(import.meta.url).pathname), 'fixtures/hello.pdf')
+  const r = await convertFile(fixture)
+  assert.equal(r.warnings.length, 0, 'a working PDF must not warn')
+  assert.match(r.markdown, /Hello PDF fixture/)
+})
+
 test('unsupported and broken files degrade gracefully', async (t) => {
   const d = tmp(t)
   fs.writeFileSync(path.join(d, 'x.xyz'), 'data')
