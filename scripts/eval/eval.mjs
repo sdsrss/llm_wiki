@@ -21,10 +21,21 @@ const k = Number.parseInt(opt('-k', '5'), 10)
 const probes = fs.readFileSync(probesFile, 'utf8').split('\n').filter(Boolean).map((l, i) => {
   try { return JSON.parse(l) } catch { console.error(`probes line ${i + 1}: invalid JSON`); process.exit(1) }
 })
+const PROBE_TYPES = ['fact', 'multihop', 'xlang', 'none']
 const validIds = new Set(listWikiPages(kb).filter(p => !p.error).map(p => p.relPath.replace(/\.md$/, '')))
 for (const p of probes) {
-  if (!p.q || !Array.isArray(p.expect) || p.expect.length === 0) { console.error(`bad probe: ${JSON.stringify(p)}`); process.exit(1) }
+  const type = p.type ?? 'fact'
+  if (!p.q || !Array.isArray(p.expect) || !PROBE_TYPES.includes(type)) {
+    console.error(`bad probe: ${JSON.stringify(p)}`); process.exit(1)
+  }
+  if (type === 'none' ? p.expect.length !== 0 : p.expect.length === 0) {
+    console.error(`probe type "${type}" has ${p.expect.length ? 'a non-empty' : 'an empty'} expect: ${JSON.stringify(p)}`); process.exit(1)
+  }
   for (const id of p.expect) if (!validIds.has(id)) { console.error(`probe expects unknown page id: ${id}`); process.exit(1) }
+}
+const retrievalProbes = probes.filter(p => (p.type ?? 'fact') !== 'none')
+if (retrievalProbes.length < probes.length) {
+  console.error(`note: ${probes.length - retrievalProbes.length} "none" probes skipped — retrieval metrics are undefined for them; run answer-eval.mjs for abstention`)
 }
 
 const needVec = arms.some(a => a !== 'bm25')
@@ -39,7 +50,7 @@ if (needVec) {
 
 const strip = (relPath) => relPath.replace(/\.md$/, '')
 const rows = []
-for (const p of probes) {
+for (const p of retrievalProbes) {
   let qn = null
   if (needVec) {
     const [qv] = await embedTexts(cfg, t, [p.q])
@@ -56,7 +67,7 @@ for (const p of probes) {
       got = rrfFuse([{ source: 'bm25', hits: bm }, { source: 'vector', hits: vec }], k).map(h => strip(h.relPath))
     } else { console.error(`unknown arm: ${arm}`); process.exit(1) }
     const ms = performance.now() - t0
-    rows.push({ arm, probe: p.q, lang: p.lang ?? '?', recall: recallAtK(p.expect, got, k), mrr: mrr(p.expect, got), ms, got })
+    rows.push({ arm, probe: p.q, lang: p.lang ?? '?', type: p.type ?? 'fact', recall: recallAtK(p.expect, got, k), mrr: mrr(p.expect, got), ms, got })
   }
 }
 
@@ -71,5 +82,13 @@ console.log(`\n| arm | n | Recall@${k} | MRR | avg ms |`)
 console.log('|---|---|---|---|---|')
 for (const [arm, m] of Object.entries(s)) {
   console.log(`| ${arm} | ${m.n} | ${m.recall.toFixed(3)} | ${m.mrr.toFixed(3)} | ${m.avgMs.toFixed(1)} |`)
+}
+
+console.log(`\n| arm | type | n | Recall@${k} | MRR |`)
+console.log('|---|---|---|---|---|')
+for (const [arm, m] of Object.entries(s)) {
+  for (const [ty, tm] of Object.entries(m.byType)) {
+    console.log(`| ${arm} | ${ty} | ${tm.n} | ${tm.recall.toFixed(3)} | ${tm.mrr.toFixed(3)} |`)
+  }
 }
 console.log(`\ndetail: ${outFile}`)

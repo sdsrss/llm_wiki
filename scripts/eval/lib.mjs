@@ -15,10 +15,18 @@ export function summarize(rows) {
   const byArm = {}
   for (const r of rows) (byArm[r.arm] ??= []).push(r)
   const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length
-  return Object.fromEntries(Object.entries(byArm).map(([arm, rs]) => [arm, {
+  const agg = (rs) => ({
     n: rs.length,
     recall: mean(rs.map(r => r.recall)),
     mrr: mean(rs.map(r => r.mrr)),
     avgMs: mean(rs.map(r => r.ms)),
-  }]))
+  })
+  return Object.fromEntries(Object.entries(byArm).map(([arm, rs]) => {
+    const byType = {}
+    for (const r of rs) (byType[r.type ?? 'fact'] ??= []).push(r)
+    return [arm, {
+      ...agg(rs),
+      byType: Object.fromEntries(Object.entries(byType).map(([ty, trs]) => [ty, agg(trs)])),
+    }]
+  }))
 }
