@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { recallAtK, mrr, summarize } from '../scripts/eval/lib.mjs'
+import { recallAtK, mrr, summarize, extractCitations, deswap, headToHead, abstentionSummary } from '../scripts/eval/lib.mjs'
 
 test('recallAtK: fraction of expected ids found in top-k', () => {
   assert.equal(recallAtK(['a', 'b'], ['a', 'x', 'b', 'y'], 2), 0.5)
@@ -46,4 +46,40 @@ test('summarize buckets rows without a type under "fact"', () => {
 test('summarize keeps the existing top-level shape', () => {
   const s = summarize([{ arm: 'a', type: 'fact', recall: 1, mrr: 0.5, ms: 4 }])
   assert.deepEqual(Object.keys(s.a).sort(), ['avgMs', 'byType', 'mrr', 'n', 'recall'])
+})
+
+test('extractCitations pulls unique [[ids]] ignoring anchors and aliases', () => {
+  const t = 'See [[concepts/rag]] and [[concepts/rag#缺陷|the flaws]]; also [[entities/karpathy]]. Not a link: [single].'
+  assert.deepEqual(extractCitations(t), ['concepts/rag', 'entities/karpathy'])
+})
+
+test('deswap keeps agreeing verdicts and ties disagreements', () => {
+  // second judging ran with A/B swapped, so "B" there means "A" here
+  const v1 = { correctness: 'A', citations: 'tie', completeness: 'A' }
+  const v2swapped = { correctness: 'B', citations: 'tie', completeness: 'A' }
+  assert.deepEqual(deswap(v1, v2swapped), { correctness: 'A', citations: 'tie', completeness: 'tie' })
+})
+
+test('headToHead counts wins per dimension', () => {
+  const pairs = [
+    { correctness: 'A', citations: 'B', completeness: 'tie' },
+    { correctness: 'A', citations: 'tie', completeness: 'tie' },
+  ]
+  const h = headToHead(pairs)
+  assert.deepEqual(h.correctness, { A: 2, B: 0, tie: 0, n: 2 })
+  assert.deepEqual(h.citations, { A: 0, B: 1, tie: 1, n: 2 })
+})
+
+test('abstentionSummary splits rates by probe type', () => {
+  const rows = [
+    { arm: 'bm25', type: 'none', abstained: true },
+    { arm: 'bm25', type: 'none', abstained: false },
+    { arm: 'bm25', type: 'fact', abstained: false },
+    { arm: 'bm25', type: 'fact', abstained: true },
+  ]
+  const s = abstentionSummary(rows)
+  assert.equal(s.bm25.abstentionRate, 0.5)   // on "none" probes — higher is better
+  assert.equal(s.bm25.falseAbstentionRate, 0.5) // on answerable probes — lower is better
+  assert.equal(s.bm25.nNone, 2)
+  assert.equal(s.bm25.nAnswerable, 2)
 })

@@ -30,3 +30,43 @@ export function summarize(rows) {
     }]
   }))
 }
+
+// Same wikilink shape src/export.mjs converts: [[target(#anchor)?(|alias)?]].
+export function extractCitations(text) {
+  const out = []
+  for (const m of text.matchAll(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g)) {
+    const id = m[1].trim()
+    if (id && !out.includes(id)) out.push(id)
+  }
+  return out
+}
+
+// v2 was judged with A/B swapped: flip it back, keep only verdicts both
+// orderings agree on (position-bias control), tie otherwise.
+export function deswap(v1, v2swapped) {
+  const flip = (x) => x === 'A' ? 'B' : x === 'B' ? 'A' : 'tie'
+  return Object.fromEntries(Object.keys(v1).map(d => {
+    const v2 = flip(v2swapped[d])
+    return [d, v1[d] === v2 ? v1[d] : 'tie']
+  }))
+}
+
+export function headToHead(pairs) {
+  const dims = ['correctness', 'citations', 'completeness']
+  return Object.fromEntries(dims.map(d => {
+    const c = { A: 0, B: 0, tie: 0, n: pairs.length }
+    for (const p of pairs) c[p[d]] += 1
+    return [d, c]
+  }))
+}
+
+export function abstentionSummary(rows) {
+  const byArm = {}
+  for (const r of rows) (byArm[r.arm] ??= []).push(r)
+  return Object.fromEntries(Object.entries(byArm).map(([arm, rs]) => {
+    const none = rs.filter(r => r.type === 'none')
+    const answerable = rs.filter(r => r.type !== 'none')
+    const rate = (xs) => xs.length === 0 ? null : xs.filter(r => r.abstained).length / xs.length
+    return [arm, { nNone: none.length, nAnswerable: answerable.length, abstentionRate: rate(none), falseAbstentionRate: rate(answerable) }]
+  }))
+}
