@@ -71,6 +71,9 @@ function* walk(dir, base = dir, skippedDirs = [], exclude = []) {
 // `persist: false` runs a read-only scan (e.g. for `status`) that does not
 // overwrite the .scan-plan.json a previous explicit `scan` produced.
 export async function scanSource(srcDir, kbRoot, { exclude = [], persist = true } = {}) {
+  const st = fs.statSync(srcDir, { throwIfNoEntry: false })
+  if (!st) throw new Error(`source directory not found: ${srcDir}`)
+  if (!st.isDirectory()) throw new Error(`source path is not a directory: ${srcDir}`)
   const cfg = loadKbConfig(kbRoot)
   const files = []
   const skipped = []

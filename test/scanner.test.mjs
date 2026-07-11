@@ -42,6 +42,16 @@ test('scanSource: dedup, batching, plan file', async (t) => {
   assert.ok(fs.existsSync(path.join(kb, '.scan-plan.json')))
 })
 
+// ISSUE-002: bad srcDir used to leak a raw ENOENT/ENOTDIR node error.
+test('scanSource: friendly error for a missing dir or a non-directory path', async (t) => {
+  const kb = tmp(t)
+  initKb(kb)
+  await assert.rejects(() => scanSource(path.join(kb, 'no-such-dir'), kb, {}), /source directory not found:/)
+  const f = path.join(kb, 'a-file.txt')
+  fs.writeFileSync(f, 'x')
+  await assert.rejects(() => scanSource(f, kb, {}), /source path is not a directory:/)
+})
+
 test('scanSource: symlinked dirs are reported as skipped, symlinked files still scanned', async (t) => {
   const src = tmp(t), kb = tmp(t), outside = tmp(t)
   initKb(kb)
