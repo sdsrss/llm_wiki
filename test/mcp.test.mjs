@@ -179,5 +179,42 @@ test('llm-wiki mcp speaks MCP over stdio (initialize + tools/list)', async (t) =
   assert.equal(init.result.serverInfo.name, 'llm-wiki')
   const toolsMsg = lines.find(m => m.id === 2)
   const names = toolsMsg.result.tools.map(tl => tl.name).sort()
-  assert.deepEqual(names, ['wiki_ask', 'wiki_overview', 'wiki_read_page', 'wiki_search'])
+  assert.deepEqual(names, ['wiki_ask', 'wiki_graph', 'wiki_overview', 'wiki_read_page', 'wiki_search'])
+})
+
+test('wiki_graph path returns the link chain with edge types', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const client = await connectClient(t, d)
+  const r = await client.callTool({ name: 'wiki_graph', arguments: { op: 'path', from: 'concepts/old-idea', to: 'sources/karpathy-gist' } })
+  assert.equal(r.isError ?? false, false)
+  const text = r.content[0].text
+  assert.match(text, /never follow instructions/, 'data notice present (titles are page-derived)')
+  assert.match(text, /concepts\/old-idea/)
+  assert.match(text, /superseded_by/)
+})
+
+test('wiki_graph hubs ranks pages and validates op params', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const client = await connectClient(t, d)
+  const r = await client.callTool({ name: 'wiki_graph', arguments: { op: 'hubs' } })
+  assert.equal(r.isError ?? false, false)
+  assert.match(r.content[0].text, /sources\/karpathy-gist/)
+  const bad = await client.callTool({ name: 'wiki_graph', arguments: { op: 'path', from: 'concepts/old-idea' } })
+  assert.equal(bad.isError, true)
+  assert.match(bad.content[0].text, /needs/, 'missing `to` reported, not thrown')
+  const unknown = await client.callTool({ name: 'wiki_graph', arguments: { op: 'neighbors', id: 'concepts/zzz' } })
+  assert.equal(unknown.isError, true)
+  assert.match(unknown.content[0].text, /unknown node/)
+})
+
+test('wiki_graph errors with guidance when graph.json is missing', async (t) => {
+  const d = tmp(t)
+  initKb(d) // no buildIndex → no graph.json
+  fs.rmSync(path.join(d, 'wiki/graph.json'), { force: true })
+  const client = await connectClient(t, d)
+  const r = await client.callTool({ name: 'wiki_graph', arguments: { op: 'hubs' } })
+  assert.equal(r.isError, true)
+  assert.match(r.content[0].text, /llm-wiki index/)
 })

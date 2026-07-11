@@ -10,6 +10,11 @@
   whole-page embeddings (`wiki/.vectors.json`); with `vectorEnabled: true`,
   `ask` fuses BM25 + cosine via RRF (fail-open to BM25). `--retrieve-only` now
   labels hit sources. Plus a retrieval eval harness (`scripts/eval/`).
+- feat: typed relations — optional `relations:` frontmatter (`to`/`type`/`confidence`) merged into graph.json; all edges now carry `confidence` (`extracted` for CLI-derived source/superseded_by edges, `inferred` for wikilinks and agent-written relations)
+- feat: `llm-wiki graph path|neighbors|hubs` — zero-LLM graph queries over graph.json
+- feat: MCP tool `wiki_graph` (path/neighbors/hubs)
+- feat: lint validates relations (target exists, type in `relationTypes` vocabulary, confidence value); relation targets count as incoming links for orphan detection
+- feat: GraphML/Cypher exports carry edge confidence
 
 ## 0.3.0 (2026-07-10)
 
