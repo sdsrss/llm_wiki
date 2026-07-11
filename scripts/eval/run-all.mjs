@@ -6,7 +6,7 @@
 // report — never silently.
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 
 const args = process.argv.slice(2)
 const opt = (name, dflt) => { const i = args.indexOf(name); return i === -1 ? dflt : args[i + 1] }
@@ -18,13 +18,16 @@ const k = opt('-k', '5')
 
 const sections = []
 const run = (title, argv) => {
-  try {
-    const out = execFileSync(process.execPath, argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
-    sections.push(`## ${title}\n\n\`node ${argv.join(' ')}\`\n\n${out.trim()}\n`)
-  } catch (err) {
-    const detail = [err.stdout, err.stderr].filter(Boolean).join('\n').trim()
-    sections.push(`## ${title} — SKIPPED\n\n\`node ${argv.join(' ')}\`\n\n\`\`\`\n${detail || err.message}\n\`\`\`\n`)
+  const res = spawnSync(process.execPath, argv, { encoding: 'utf8' })
+  if (res.error || res.status !== 0) {
+    const detail = [res.stdout, res.stderr].filter(Boolean).join('\n').trim()
+    sections.push(`## ${title} — SKIPPED\n\n\`node ${argv.join(' ')}\`\n\n\`\`\`\n${detail || res.error?.message || `exit ${res.status}`}\n\`\`\`\n`)
+    return
   }
+  // stderr on a successful run carries diagnostics (e.g. "N none probes skipped") — keep them.
+  const notes = (res.stderr || '').trim()
+  const notesBlock = notes ? `\n\nnotes:\n\`\`\`\n${notes}\n\`\`\`` : ''
+  sections.push(`## ${title}\n\n\`node ${argv.join(' ')}\`\n\n${res.stdout.trim()}${notesBlock}\n`)
 }
 
 run(`Retrieval — ${kb}`, ['scripts/eval/eval.mjs', '--kb', kb, '--arms', arms, '-k', k])
