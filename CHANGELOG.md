@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.1 (2026-07-11)
+
+Patch: all fixes, no new features, no deps, no KB migration. Defaults unchanged.
+
+- fix(lint): new `duplicate-relation` rule flags a repeated `to`+`type` relation
+  (index keeps the first entry; conflicting `confidence` values are named)
+- fix(lint): orphan-page detail now reads "no incoming wikilinks or relations"
+- fix(lint): promote-concepts no longer truncates concept names at an embedded
+  en/em dash (`pages 1–2`); a dash is a separator only when followed by a space
+- fix(scan): a symlinked directory matching `--exclude` is reported as `excluded`
+  rather than `symlinked directory (not followed)`
+- fix(graph): `path`/`neighbors`/`hubs` (CLI and MCP `wiki_graph`) mark invalidated
+  nodes with `⚠ invalidated`; `hubs` ignores dangling edge endpoints so a stale
+  edge no longer invents a phantom hub or inflates degree
+- fix(vector): a corrupt `wiki/.vectors.json` now fails open — `ask` degrades to
+  BM25 with a stderr warning instead of crashing
+- fix(embed): `embedded` count reports only pages actually stored (a pathological
+  zero-vector page is skipped, not counted)
+- fix(export): `.llm-wiki-export` marker now records `{tool, version}` provenance
+  (old empty markers still recognized); `--out` pointing at a file errors clearly
+- fix(templates): AGENTS.md wiki-layer line harmonizes "Humans review" with the
+  documented occasional hand-edit exception
+
 ## 0.4.0 (2026-07-11)
 
 All additive — no breaking changes, no KB migration, defaults unchanged
