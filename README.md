@@ -106,9 +106,9 @@ orphan detection.
 ## Obsidian integration
 
 An llm_wiki KB is a plain folder of markdown with YAML frontmatter, so it opens
-directly as an Obsidian vault — "Open folder as vault", point it at `./kb`. Do not
-pre-create a `.obsidian/` folder; Obsidian creates one with your own settings on
-first open, and llm-wiki never writes it.
+directly as an Obsidian vault — "Open folder as vault", point it at `./kb`. Don't
+pre-create or edit `.obsidian/` — let Obsidian create and manage its own config
+folder; llm-wiki never writes it.
 
 What lights up out of the box:
 
@@ -139,7 +139,11 @@ remain the writers of `wiki/` pages. If you edit pages by hand in Obsidian, run
 and `llms.txt`. There is deliberately no bidirectional sync: concurrent writes to the
 same file (agent and editor at once) can corrupt content silently, which is why it stays
 out of scope. For tools that need standard markdown links instead of wikilinks, export a
-converted copy: `npx @sdsrs/llm-wiki@0 export --format markdown --kb <kb>`.
+converted copy: `npx @sdsrs/llm-wiki@0 export --format markdown --kb <kb>`. The default
+output dir is `<kb>/wiki-md/` (inside the KB so its `../raw/...` links resolve against the
+real raw layer); if you use the KB itself as an Obsidian vault, add `wiki-md/` to Obsidian's
+"Excluded files" so the converted copies aren't indexed as duplicate notes — or export with
+`--out` outside the KB, at the cost of `raw/` links not resolving.
 
 **Verification checklist.** The conventions above are derived from Obsidian's docs, not
 tested against a specific Obsidian build. Run this once after opening the vault to confirm

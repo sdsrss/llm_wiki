@@ -152,3 +152,12 @@ test('exportMarkdownPages marker-guards a clean re-export and refuses foreign no
   assert.throws(() => exportMarkdownPages(d, { out: stray }), /refusing to overwrite non-empty/)
   assert.ok(fs.existsSync(path.join(stray, 'keep.md')), 'foreign file left untouched')
 })
+
+test('exportMarkdownPages refuses --out pointing at the KB root or managed layers', (t) => {
+  const d = seedKb(t)
+  assert.throws(() => exportMarkdownPages(d, { out: path.join(d, 'raw') }), /managed layers/, 'refuses the immutable raw/ layer')
+  assert.throws(() => exportMarkdownPages(d, { out: path.join(d, 'wiki') }), /managed layers/, 'refuses the wiki/ layer')
+  assert.throws(() => exportMarkdownPages(d, { out: d }), /managed layers/, 'refuses the KB root itself')
+  // raw/ untouched — no marker leaked into it
+  assert.ok(!fs.existsSync(path.join(d, 'raw/.llm-wiki-export')), 'no export marker leaked into raw/')
+})

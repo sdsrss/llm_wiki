@@ -57,6 +57,12 @@ const EXPORT_MARKER = '.llm-wiki-export'
 export function exportMarkdownPages(kbRoot, { out } = {}) {
   const p = kbPaths(kbRoot)
   const outDir = path.resolve(out ?? path.join(kbRoot, 'wiki-md'))
+  // Never let --out resolve onto a managed KB layer: the marker guard below would
+  // later rmSync it, wiping the immutable raw/ inputs or the wiki/ pages themselves.
+  const forbidden = [path.resolve(kbRoot), path.resolve(kbRoot, 'raw'), path.resolve(p.wiki)]
+  if (forbidden.includes(outDir)) {
+    throw new Error(`refusing to export into the KB's managed layers (${path.relative(kbRoot, outDir) || '.'}) — pass a dedicated --out directory`)
+  }
   const marker = path.join(outDir, EXPORT_MARKER)
   if (fs.existsSync(outDir)) {
     if (fs.existsSync(marker)) fs.rmSync(outDir, { recursive: true, force: true })
