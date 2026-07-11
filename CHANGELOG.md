@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.1 (2026-07-11)
+
+No breaking changes, no KB migration, no default-behavior change: the only
+functional addition is advisory `scan` output (exit code and existing lines
+untouched).
+
+- feat(scan): domain-mixture heuristic — warns when a source directory looks
+  multi-domain and suggests one KB per domain. Two zero-LLM signals: language
+  mix across scanned text files (minority language ≥3 files and ≥25%) and
+  dispersed wiki tags (≥10 tagged pages with no tag covering ≥30%). Advisory
+  only; the scan report gains a `domainMixture` field. Suite 171 → 174.
+- docs: README restructured (install → what it does → why-not-RAG →
+  usage → FAQ); GitHub repo description refreshed.
+- Measured 2026-07-11 (dogfood KB, 28 probes, `locatePages` 'auto' — the path
+  `wiki_search`/skills use): enabling `vectorEnabled` on a KB lifts Recall@5
+  0.733 → 0.967 (22/30 → 29/30) and MRR 0.646 → 0.769; the previously missed
+  cross-language probe now hits via the vector channel. KB-side config, not a
+  code change — recorded here as the reference numbers behind the README claim.
+
 ## 0.6.0 (2026-07-11)
 
 No breaking changes, no KB migration. Default behavior unchanged for KBs

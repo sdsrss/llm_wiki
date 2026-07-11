@@ -1,31 +1,83 @@
 # @sdsrs/llm-wiki
 
-> npm package `@sdsrs/llm-wiki`; the installed binary is `llm-wiki`.
+> Compile a messy folder of documents into a knowledge base your coding agent
+> maintains — and answers from with **whole pages, never chunks**.
 
-Compile a messy directory of documents (PDF, DOCX, HTML, Markdown, ...) into a
-Karpathy-style `llm_wiki` knowledge base: an immutable `raw/` layer of converted
-source markdown plus a `wiki/` layer of full, self-contained, cross-linked pages
-that a coding agent maintains. Query it standalone from the CLI, or wire it into
-Claude Code / Codex via the bundled skills.
+Point it at PDFs, DOCX, HTML, Markdown. It builds a Karpathy-style `llm_wiki`:
+an immutable `raw/` layer of converted sources plus a `wiki/` layer of full,
+self-contained, cross-linked pages. Query it from the CLI, from Claude Code /
+Codex via bundled skills, or from any MCP client.
 
-## Install / quickstart
+## Install
+
+No install needed — run everything with `npx`:
 
 ```sh
-npx @sdsrs/llm-wiki init my-kb              # scaffold raw/, wiki/, AGENTS.md, wiki.config.json
-cd my-kb
-npx @sdsrs/llm-wiki scan ~/Documents/src   # inventory: dedup, batches, token estimate
-npx @sdsrs/llm-wiki convert                # convert planned files into raw/*.md
-# build the wiki/ pages from raw/ with the wiki-build skill (Claude Code / Codex)
-npx @sdsrs/llm-wiki ask "what did we decide about X?"
+npx @sdsrs/llm-wiki@0 --help
 ```
 
-`scan` + `convert` fill `raw/`. The `wiki/` pages themselves are written by an
-agent running the **wiki-build** skill against `AGENTS.md` (the KB contract) — the
-CLI does not call an LLM to build pages, only to `ask`. Scan also warns when the
-source looks multi-domain (mixed-language files or dispersed wiki tags) and
-suggests splitting — one KB per domain.
+Or install globally:
 
-## Commands
+```sh
+npm i -g @sdsrs/llm-wiki     # installs the `llm-wiki` binary
+```
+
+> Always spell the package `@sdsrs/llm-wiki` — the bare `llm-wiki` name on npm
+> is an unrelated third-party package.
+
+**Quickstart:**
+
+```sh
+npx @sdsrs/llm-wiki@0 init my-kb            # scaffold raw/, wiki/, AGENTS.md, wiki.config.json
+cd my-kb
+npx @sdsrs/llm-wiki@0 scan ~/Documents/src  # inventory: dedup, batches, token estimate
+npx @sdsrs/llm-wiki@0 convert               # convert planned files into raw/*.md
+# build the wiki/ pages with the wiki-build skill (Claude Code / Codex — see "Skills" below)
+npx @sdsrs/llm-wiki@0 ask "what did we decide about X?"
+```
+
+## What it does
+
+- **Compiles** documents into a two-layer KB: `raw/` (immutable converted
+  markdown, agents only read it) and `wiki/` (typed pages — sources, entities,
+  concepts, comparisons — written and maintained by an agent following the KB's
+  `AGENTS.md` contract).
+- **Answers questions** with citations: retrieval locates pages, then the model
+  reads them *whole*. When selected pages exceed the token budget, the
+  lowest-ranked pages are dropped entirely — never truncated mid-page.
+- **Keeps itself honest**: `lint` produces mechanical checks plus a semantic
+  worklist; `status` tracks what changed upstream; outdated pages are marked
+  `status: invalidated` (with `superseded_by`), never deleted.
+- **Stays cheap**: the CLI calls an LLM only for `ask` (and `embed` if you opt
+  into vectors). Scanning, converting, indexing, linting, and graph queries are
+  all zero-LLM.
+
+## Why this instead of RAG?
+
+- **Compile once, stay fresh** — instead of re-interpreting raw documents on
+  every query, knowledge is compiled into curated pages once and kept fresh
+  incrementally.
+- **Whole pages, never chunks** — the model always reads coherent,
+  self-contained documents, so answers come with real provenance instead of
+  stitched fragments.
+- **No vector DB required** — retrieval is BM25 out of the box; optional
+  whole-page embeddings live in one sidecar JSON file. On our dogfood KB
+  (28 probes), enabling vectors lifted Recall@5 from 0.73 to 0.97 — the gap
+  was almost entirely cross-language queries.
+- **A real link graph, queried without an LLM** — `graph path | neighbors |
+  hubs` traverse wikilinks and typed relations (`implements`, `supersedes`, …)
+  instantly.
+- **Agent-native, tool-agnostic** — the same KB serves a standalone CLI,
+  Claude Code / Codex skills, an MCP server (Cursor, Windsurf, …), and opens
+  directly as an Obsidian vault.
+- **Prompt-injection posture built in** — page content is treated as untrusted
+  data everywhere a model sees it, with an explicit notice.
+- **Nothing is ever lost** — `raw/` is immutable; wiki knowledge is
+  invalidated, not deleted, so decisions keep their history.
+
+## Usage
+
+### Commands
 
 | command | purpose |
 |---|---|
@@ -36,59 +88,52 @@ suggests splitting — one KB per domain.
 | `ask <question>` | answer from the KB using full pages (never chunks), with citations |
 | `lint` | mechanical checks + a semantic worklist for the agent |
 | `status` | incremental state: uncompiled raw files, source-dir diff, affected wiki pages |
-| `export` | export the wiki graph as GraphML, Cypher, or a self-contained interactive HTML viewer |
 | `graph` | query `graph.json` with `path` / `neighbors` / `hubs` (zero-LLM traversal) |
-| `embed` | compute/update page embeddings (wiki/.vectors.json) for optional vector page location |
-| `mcp` | run a read-only MCP server (stdio) over the KB — for Cursor/Windsurf and other MCP-only agents |
+| `embed` | compute/update page embeddings (`wiki/.vectors.json`) for optional vector location |
+| `export` | export the graph as GraphML, Cypher, or an interactive HTML viewer; or the wiki as standard-markdown copies |
+| `mcp` | run a read-only MCP server (stdio) over the KB |
 
-`ask` supports `-k <n>` (pages to load) and `--retrieve-only` (locate pages by
-BM25 without calling the LLM). All commands take `--kb <dir>` (default `.`).
+All commands take `--kb <dir>` (default `.`). `ask` supports `-k <n>` (pages to
+load) and `--retrieve-only` (locate pages without calling the LLM).
 
-Retrieval is lexical (BM25). When it finds nothing — typically a question
-asked in a different language than the KB pages, or fully rephrased — `ask`
-falls back to letting the model pick pages from the KB listing
-(`llms.txt`), then answers from those pages as usual; only ids of real,
-non-invalidated pages are accepted. `--retrieve-only` stays pure BM25 while
-vector location is off (the default).
-Pages are always sent whole; when the selected pages exceed
-`askTokenBudget` (`wiki.config.json`, default 32000), the lowest-ranked
-pages are dropped, never truncated.
+`scan` also warns when the source looks multi-domain (mixed-language files or
+dispersed wiki tags) and suggests splitting — one KB per domain.
 
-**Optional vector page location** (v2.1): set `"vectorEnabled": true` in
-`wiki.config.json`, add `"embeddingModel"` to your provider in
-`~/.llm-wiki/config.json`, and run `npx @sdsrs/llm-wiki@0 embed`. `ask` then
-fuses BM25 with whole-page cosine similarity (RRF) — fixing cross-language and
-rephrased queries — and `--retrieve-only` labels each hit `[bm25]`, `[vector]`
-or `[bm25+vector]`. Vectors only locate pages; context is still whole pages,
+### Asking questions
+
+Retrieval is lexical (BM25) by default. When it finds nothing — typically a
+question asked in a different language than the KB pages, or fully rephrased —
+`ask` falls back to letting the model pick pages from the KB listing
+(`llms.txt`); only ids of real, non-invalidated pages are accepted. Pages are
+always sent whole; over `askTokenBudget` (`wiki.config.json`, default 32000)
+the lowest-ranked pages are dropped, never truncated.
+
+### Vector page location (optional)
+
+Fixes cross-language and rephrased queries. Three steps:
+
+1. Set `"vectorEnabled": true` in `wiki.config.json`.
+2. Add `"embeddingModel"` to your provider in `~/.llm-wiki/config.json`.
+3. Run `npx @sdsrs/llm-wiki@0 embed`.
+
+`ask` (and the MCP `wiki_search` tool) then fuse BM25 with whole-page cosine
+similarity (RRF); `--retrieve-only` labels each hit `[bm25]`, `[vector]` or
+`[bm25+vector]`. Vectors only *locate* pages — context is still whole pages,
 never chunks. Any vector-path failure falls back to BM25 with a warning.
 
 ### Graph queries
 
 `graph.json` (rebuilt by `index`) is a link graph over the pages — wikilinks,
-`superseded_by`, and typed relations. Query it without any LLM call:
+`superseded_by`, and typed relations:
 
 ```sh
-npx @sdsrs/llm-wiki@0 graph hubs --kb ./kb --top 5        # most-connected pages
+npx @sdsrs/llm-wiki@0 graph hubs --kb ./kb --top 5             # most-connected pages
 npx @sdsrs/llm-wiki@0 graph path <from-id> <to-id> --kb ./kb   # shortest link chain
 npx @sdsrs/llm-wiki@0 graph neighbors <id> -d 2 --kb ./kb      # pages within N hops
 ```
 
-`hubs` ranks pages by degree (raw files excluded), e.g.:
-
-```
- 31  concepts/llm-wiki  (in 10 / out 21)  LLM Wiki
- 31  entities/karpathy  (in 18 / out 13)  Andrej Karpathy
- 21  entities/obsidian  (in 10 / out 11)  Obsidian
- 16  concepts/rag  (in 4 / out 12)  RAG（检索增强生成）
- 13  concepts/ingest-query-lint  (in 3 / out 10)  Ingest / Query / Lint 三大操作
-```
-
-The same three queries are exposed to MCP agents as `wiki_graph`
-(`op: path | neighbors | hubs`).
-
-**Typed relations.** Body `[[wikilinks]]` capture that two pages relate; when the
-*kind* of link matters, record it in the page frontmatter (edges merge into
-`graph.json` on `index`):
+When the *kind* of link matters, record it in page frontmatter (edges merge
+into `graph.json` on `index`):
 
 ```yaml
 relations:
@@ -97,67 +142,51 @@ relations:
     confidence: inferred    # extracted | inferred | ambiguous
 ```
 
-`type` must be in the `relationTypes` vocabulary in `wiki.config.json` (extend it
-when the domain needs it). `confidence` records provenance: `extracted` =
-CLI-derived structure (`source` / `superseded_by` edges), `inferred` = agent
-judgment (the default, also carried by wikilinks), `ambiguous` = flagged for a
-human to resolve. `llm-wiki lint` validates that each relation target exists and
-its `type` is in the vocabulary, and counts relation targets as incoming links for
-orphan detection.
+`lint` validates each relation target and type; `ambiguous` marks edges for a
+human to resolve.
 
-## Obsidian integration
+### Skills (Claude Code / Codex)
 
-An llm_wiki KB is a plain folder of markdown with YAML frontmatter, so it opens
-directly as an Obsidian vault — "Open folder as vault", point it at `./kb`. Don't
-pre-create or edit `.obsidian/` — let Obsidian create and manage its own config
-folder; llm-wiki never writes it.
+The bundled skills (`wiki-build`, `wiki-ingest`, `wiki-query`, `wiki-lint`,
+`wiki-connect`, `wiki-distill`) let a coding agent build and maintain the KB —
+the CLI never LLM-writes pages itself.
 
-What lights up out of the box:
+As a Claude Code plugin (recommended — updates with the repo):
 
-- **Graph view + backlinks** from the path-style `[[wikilinks]]` the pages already
-  use (`[[entities/karpathy]]`) — they resolve across the `sources/`, `entities/`,
-  `concepts/`, `comparisons/` subfolders and populate the graph and backlinks pane.
-- **Properties panel** from the page frontmatter (`type`, `title`, `tags`, `created`,
-  `updated`, …). `tags` and `aliases` are YAML string lists, exactly Obsidian's
-  expected shape (no `#` prefix inside the frontmatter list).
-- **Bases** (a core plugin) reads those properties into table/card views you can
-  filter on `type`, `tags`, or `status` — e.g. a base over `type == "concept"` with a
-  filter `status != "invalidated"` to hide retired pages.
-- **Link previews**: the frontmatter `description` doubles as Obsidian's hover-preview
-  text for a page.
+```
+/plugin marketplace add sdsrss/llm_wiki
+/plugin install llm-wiki
+```
 
-Optional per-page `aliases` (a YAML list of alternative names) feed Obsidian's link
-autocomplete and alternate-name resolution; add them at page creation for topics with
-well-known synonyms, translations, or abbreviations.
+Or copied into a project (works for Codex and other agents too):
 
-Typed `relations` (a list of objects — `to`/`type`/`confidence`) are valid YAML and
-round-trip fine, but a list-of-objects renders best in source mode rather than the
-Properties panel; they are primarily consumed by `llm-wiki graph` / the MCP server, not
-eyeballed in Obsidian.
+```sh
+npx @sdsrs/llm-wiki@0 install-skills                    # copy wiki-* skills into ./.claude
+npx @sdsrs/llm-wiki@0 connect <projectDir> --kb <path>  # register the KB in a project's CLAUDE.md
+```
 
-**Positioning.** Obsidian is for browsing and annotation; agents (via the wiki-* skills)
-remain the writers of `wiki/` pages. If you edit pages by hand in Obsidian, run
-`npx @sdsrs/llm-wiki@0 index --kb <kb>` afterwards to rebuild `index.md`, `graph.json`,
-and `llms.txt`. There is deliberately no bidirectional sync: concurrent writes to the
-same file (agent and editor at once) can corrupt content silently, which is why it stays
-out of scope. For tools that need standard markdown links instead of wikilinks, export a
-converted copy: `npx @sdsrs/llm-wiki@0 export --format markdown --kb <kb>`. The default
-output dir is `<kb>/wiki-md/` (inside the KB so its `../raw/...` links resolve against the
-real raw layer); if you use the KB itself as an Obsidian vault, add `wiki-md/` to Obsidian's
-"Excluded files" so the converted copies aren't indexed as duplicate notes — or export with
-`--out` outside the KB, at the cost of `raw/` links not resolving.
+### MCP server (Cursor, Windsurf, …)
 
-**Verification checklist.** The conventions above are derived from Obsidian's docs, not
-tested against a specific Obsidian build. Run this once after opening the vault to confirm
-them on your Obsidian version:
+```json
+{ "mcpServers": { "my-kb": { "command": "npx", "args": ["-y", "@sdsrs/llm-wiki@0", "mcp", "--kb", "/path/to/my-kb"] } } }
+```
 
-- [ ] Open `./kb` as a vault ("Open folder as vault").
-- [ ] Graph view shows clusters of typed pages linked by wikilinks.
-- [ ] Open a page — the backlinks panel is non-empty for a linked page.
-- [ ] Create a Base filtered to `type == "concept"`.
-- [ ] Add the filter `status != "invalidated"` and confirm invalidated pages drop out.
+Five read-only tools: `wiki_overview`, `wiki_search` (page locator — ids +
+descriptions, never full text), `wiki_read_page`, `wiki_ask` (needs LLM
+config), `wiki_graph`. Page content is served as untrusted data with an
+explicit notice.
 
-## LLM config
+### Obsidian
+
+A KB is a plain folder of markdown with YAML frontmatter — open it directly
+with "Open folder as vault". Graph view and backlinks light up from the
+path-style `[[wikilinks]]`, the Properties panel from the frontmatter, and
+Bases can filter on `type` / `tags` / `status` (e.g. hide
+`status == "invalidated"`). Obsidian is for browsing and annotation; agents
+remain the writers. If you hand-edit pages, run
+`npx @sdsrs/llm-wiki@0 index` afterwards to rebuild the derived files.
+
+### LLM config
 
 `ask` needs an OpenAI-compatible endpoint. Configure `~/.llm-wiki/config.json`:
 
@@ -171,50 +200,10 @@ them on your Obsidian version:
 }
 ```
 
-The first provider whose `apiKeyEnv` env var is set wins. Export the matching key
-(`OPENAI_API_KEY` / `OPENROUTER_API_KEY`). Proxies are honored via the standard
-`HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` env vars.
+The first provider whose `apiKeyEnv` env var is set wins. Proxies are honored
+via the standard `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` env vars.
 
-## Skills and connecting
-
-The skills (`wiki-build`, `wiki-ingest`, `wiki-query`, `wiki-lint`, `wiki-connect`,
-`wiki-distill`) let a coding agent build and maintain the KB. Two ways to get them:
-
-**As a Claude Code plugin** (recommended — updates with the repo):
-
-```
-/plugin marketplace add sdsrss/llm_wiki
-/plugin install llm-wiki
-```
-
-**Copied into a project** (works for Codex and other agents too):
-
-```sh
-npx @sdsrs/llm-wiki install-skills                    # copy wiki-* skills into ./.claude
-npx @sdsrs/llm-wiki connect <projectDir> --kb <path>  # register a KB into a project's CLAUDE.md
-```
-
-> **Migration note (pre-0.2.0 checkouts):** `connect` blocks written before the
-> npm rename say `npx llm-wiki ...` — on npm that bare name is an **unrelated
-> third-party package**. Re-run `connect` once per project to refresh the
-> sentinel block (it is rewritten in place, idempotently).
-
-## MCP server
-
-For agents that speak MCP but cannot run the bundled skills (Cursor, Windsurf, …):
-
-```json
-{ "mcpServers": { "my-kb": { "command": "npx", "args": ["-y", "@sdsrs/llm-wiki@0", "mcp", "--kb", "/path/to/my-kb"] } } }
-```
-
-Five read-only tools: `wiki_overview` (index catalog), `wiki_search` (BM25 page
-locator — ids + descriptions, never full text), `wiki_read_page` (one whole page
-by id), `wiki_ask` (one-shot Q&A with citations; needs `~/.llm-wiki/config.json`,
-errors with guidance otherwise), `wiki_graph` (zero-LLM link-graph queries —
-`op: path | neighbors | hubs` over `graph.json`). Page content is served as untrusted data with an
-explicit notice, mirroring the skills' prompt-injection posture.
-
-## KB layout
+### KB layout
 
 ```
 my-kb/
@@ -226,10 +215,51 @@ my-kb/
   wiki.config.json     thresholds, batch size, language
 ```
 
+## FAQ
+
+**Do I need an API key?**
+Only for `ask` (answering) and `embed` (optional vectors). Everything else —
+scan, convert, index, lint, graph, export, the skills' bookkeeping — is
+zero-LLM and offline.
+
+**Am I locked in?**
+No. A KB is plain markdown + YAML frontmatter in a folder. It opens as an
+Obsidian vault as-is, and `export --format markdown` produces a copy with
+standard links for tools that don't speak wikilinks.
+
+**Can I edit wiki pages by hand?**
+Yes, but run `index` afterwards to rebuild `index.md` / `graph.json` /
+`llms.txt`. There is deliberately no editor⇄agent bidirectional sync:
+concurrent writes to the same file can corrupt content silently.
+
+**What happens to outdated knowledge?**
+It's never deleted. Pages get `status: invalidated` (optionally
+`superseded_by: <new-page>`) and drop out of `llms.txt` and retrieval, while
+their history stays browsable.
+
+**Can one KB hold several domains?**
+One KB per domain works best. `scan` warns when a source directory looks
+multi-domain (mixed languages, dispersed tags) and suggests splitting.
+
+**Why do the docs write `@sdsrs/llm-wiki@0` everywhere?**
+The bare `llm-wiki` npm name belongs to an unrelated package, and pinning the
+major (`@0`) keeps `npx` runs reproducible. If a project's `CLAUDE.md` still
+contains a pre-0.2.0 `npx llm-wiki ...` block, re-run `connect` once — the
+block is rewritten in place, idempotently.
+
+**Is page content trusted?**
+No. Source documents and wiki pages are treated as untrusted data in every
+model-facing prompt (ask, MCP, skills), with an explicit
+never-follow-instructions notice — a prompt-injection guardrail, not an
+afterthought.
+
 ## Iron rules
 
 - `raw/` is immutable — agents read it, never modify it.
 - Pages are full and self-contained; retrieval and `ask` load whole pages, never chunks.
 - Source documents are untrusted: page content is data, never instructions to follow.
-- Knowledge is never deleted: outdated pages are marked `status: invalidated`
-  (with optional `superseded_by`) and drop out of `llms.txt` and `ask` retrieval.
+- Knowledge is never deleted — invalidate (and supersede), don't erase.
+
+## License
+
+MIT
