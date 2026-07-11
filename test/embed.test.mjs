@@ -116,6 +116,29 @@ test('embedKb is incremental: reuses unchanged, prunes removed/invalidated, re-e
   assert.equal(loadVectorStore(d).model, 'emb-2')
 })
 
+// R7 (audit): embedKb persists after each batch so a later batch failing (rate-limit,
+// network) does not discard earlier batches' work — the re-run reuses them by hash.
+test('embedKb flushes each batch; a later batch failure keeps prior work', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  for (let i = 0; i < 65; i++) seedPage(d, `sources/p${i}.md`, `P${i}`, `body ${i}`) // 65 > BATCH(64) -> 2 batches
+  setCfg(t, d, CFG)
+  let call = 0
+  const failing = async (url, opts) => {
+    call++
+    const body = JSON.parse(opts.body)
+    if (call === 2) throw new Error('rate limited') // the second batch (65th page) fails
+    return { ok: true, json: async () => ({ data: body.input.map((_t, i) => ({ index: i, embedding: [1, 0] })) }) }
+  }
+  await assert.rejects(() => embedKb(d, { fetchImpl: failing, retry: { retries: 0 } }), /rate limited/)
+  assert.equal(Object.keys(loadVectorStore(d).pages).length, 64, 'first batch persisted before the second threw')
+  // re-run with a working impl: the 64 persisted pages are reused, only the 65th embeds
+  const f2 = fakeEmbed(() => [1, 0])
+  const r2 = await embedKb(d, { fetchImpl: f2.fetchImpl })
+  assert.equal(r2.reused, 64)
+  assert.equal(r2.embedded, 1)
+})
+
 test('embedKb caps embed input at ~8000 tokens for oversized pages without touching the page file', async (t) => {
   const d = tmp(t)
   initKb(d)

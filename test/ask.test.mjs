@@ -121,7 +121,7 @@ test('askKb surfaces the error body on non-ok responses', async (t) => {
   seedKb(d)
   llmEnv(t, d)
   const fetchImpl = async () => ({ ok: false, status: 429, text: async () => '{"error":{"message":"rate limited, retry later"}}' })
-  await assert.rejects(() => askKb(d, '三层架构有哪些', { fetchImpl }), /429.*rate limited/s)
+  await assert.rejects(() => askKb(d, '三层架构有哪些', { fetchImpl, retry: { retries: 0 } }), /429.*rate limited/s)
 })
 
 test('askKb rejects with a clear error on unexpected 200 response shapes', async (t) => {
@@ -339,7 +339,7 @@ test('locatePages degrades to BM25 with a warning when the embedding call fails'
   process.stderr.write = (s) => { warnings.push(String(s)); return true }
   t.after(() => { process.stderr.write = orig })
   const fetchImpl = async () => ({ ok: false, status: 500, text: async () => 'boom' })
-  const r = await locatePages(d, '三层架构有哪些', { fetchImpl })
+  const r = await locatePages(d, '三层架构有哪些', { fetchImpl, retry: { retries: 0 } })
   assert.equal(r.usedVector, false)
   assert.deepEqual(r.hits[0].sources, ['bm25'])
   assert.match(warnings.join(''), /vector retrieval unavailable/)

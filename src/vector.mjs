@@ -36,7 +36,13 @@ export function loadVectorStore(kbRoot) {
 export function saveVectorStore(kbRoot, store) {
   const rounded = { ...store, pages: Object.fromEntries(Object.entries(store.pages).map(([id, e]) =>
     [id, { hash: e.hash, vec: e.vec.map(x => Number(x.toFixed(5))) }])) }
-  fs.writeFileSync(vectorStorePath(kbRoot), JSON.stringify(rounded) + '\n')
+  // Atomic write: the per-batch flush in embedKb re-saves repeatedly; a crash
+  // mid-write must not leave a truncated store (loadVectorStore fails open, but
+  // temp+rename avoids the corruption entirely).
+  const f = vectorStorePath(kbRoot)
+  const tmp = `${f}.tmp`
+  fs.writeFileSync(tmp, JSON.stringify(rounded) + '\n')
+  fs.renameSync(tmp, f)
 }
 
 // queryVec must already be normalized; stored vecs are normalized at save time,

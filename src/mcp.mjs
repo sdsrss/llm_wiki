@@ -17,7 +17,7 @@ const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.ur
 function textResult(text) { return { content: [{ type: 'text', text }] } }
 function errorResult(text) { return { content: [{ type: 'text', text }], isError: true } }
 
-export function createMcpServer(kbRoot, { fetchImpl } = {}) {
+export function createMcpServer(kbRoot, { fetchImpl, retry } = {}) {
   const p = kbPaths(kbRoot)
   const server = new McpServer({ name: 'llm-wiki', version: pkg.version })
 
@@ -38,7 +38,7 @@ export function createMcpServer(kbRoot, { fetchImpl } = {}) {
   }, async ({ query, k = 6 }) => {
     // 'auto' mode: opt-in via the KB's vectorEnabled, fail-open on any vector
     // error — KBs without embeddings keep the exact pre-v2.5 BM25 behavior.
-    const { hits, usedVector } = await locatePages(kbRoot, query, { k, ...(fetchImpl ? { fetchImpl } : {}) })
+    const { hits, usedVector } = await locatePages(kbRoot, query, { k, retry, ...(fetchImpl ? { fetchImpl } : {}) })
     if (hits.length === 0) {
       return textResult(usedVector
         ? 'No match from BM25 or vector retrieval. Call wiki_overview and pick pages from the catalog yourself.'
@@ -79,7 +79,7 @@ export function createMcpServer(kbRoot, { fetchImpl } = {}) {
     inputSchema: { question: z.string(), k: z.number().int().min(1).max(20).optional() },
   }, async ({ question, k = 6 }) => {
     try {
-      const r = await askKb(kbRoot, question, { k, ...(fetchImpl ? { fetchImpl } : {}) })
+      const r = await askKb(kbRoot, question, { k, retry, ...(fetchImpl ? { fetchImpl } : {}) })
       const parts = [DATA_NOTICE, '', r.answer, '', `--- pages used: ${r.pages.map(h => h.relPath).join(', ')}`]
       if (r.fallback) parts.push('(BM25 had no lexical match; pages were selected from the KB listing by the model)')
       if (r.trimmed?.length) parts.push(`(token budget: dropped ${r.trimmed.length} lower-ranked page(s): ${r.trimmed.join(', ')})`)

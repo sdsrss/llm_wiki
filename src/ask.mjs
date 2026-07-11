@@ -8,6 +8,7 @@ import { estimateTokens } from './scanner.mjs'
 import { loadLlmConfig, makeTransport } from './llm-config.mjs'
 import { loadVectorStore, normalize, cosineTopK } from './vector.mjs'
 import { embedTexts } from './embed.mjs'
+import { fetchWithRetry } from './retry.mjs'
 
 export function retrievePages(kbRoot, question, k = 6) {
   const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
@@ -39,7 +40,7 @@ export function rrfFuse(lists, k) {
 // stderr warning. 'bm25': lexical only, returns before any vector access.
 // 'hybrid': explicit BM25+vector fusion — every missing prerequisite (and any
 // vector error) throws instead of degrading, and vectorEnabled is ignored.
-export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieval = 'auto' } = {}) {
+export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieval = 'auto', retry } = {}) {
   if (!['auto', 'bm25', 'hybrid'].includes(retrieval)) throw new Error(`unknown retrieval mode: ${retrieval}`)
   const bm25 = retrievePages(kbRoot, question, k)
   const asBm25 = () => ({ hits: bm25.map(h => ({ ...h, sources: ['bm25'] })), usedVector: false })
@@ -59,7 +60,7 @@ export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieva
   // fusing it produces silent garbage, so treat it as missing (not a failure).
   if (store.model !== cfg.embeddingModel) return unavailable(`vector store was built with "${store.model}" but config says "${cfg.embeddingModel}" — re-run \`llm-wiki embed\``)
   try {
-    const t = fetchImpl ? { fetchImpl, dispatcher: undefined } : await makeTransport()
+    const t = fetchImpl ? { fetchImpl, dispatcher: undefined, retry } : { ...(await makeTransport()), retry }
     const [qv] = await embedTexts(cfg, t, [question])
     const qn = normalize(qv)
     const vecHits = qn ? cosineTopK(qn, store, k).map(v => ({ relPath: v.id, score: v.score })) : []
@@ -78,12 +79,11 @@ export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieva
 }
 
 export async function chatCompletion(cfg, t, messages) {
-  const res = await t.fetchImpl(`${cfg.baseURL.replace(/\/$/, '')}/chat/completions`, {
+  const res = await fetchWithRetry(t.fetchImpl, `${cfg.baseURL.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
     body: JSON.stringify({ model: cfg.model, messages }),
-    ...(t.dispatcher ? { dispatcher: t.dispatcher } : {}),
-  })
+  }, { dispatcher: t.dispatcher, ...(t.retry ?? {}) })
   if (!res.ok) {
     let body = ''
     try { body = (await res.text()).slice(0, 200) } catch { /* body unreadable; status alone */ }
@@ -130,9 +130,9 @@ async function pickPagesFromListing(p, question, k, cfg, t, validIds) {
   return picked.map(id => ({ relPath: `${id}.md`, score: 0 }))
 }
 
-export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fetchImpl, retrieval = 'auto' } = {}) {
+export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fetchImpl, retrieval = 'auto', retry } = {}) {
   const p = kbPaths(kbRoot)
-  let { hits } = await locatePages(kbRoot, question, { k, fetchImpl, retrieval })
+  let { hits } = await locatePages(kbRoot, question, { k, fetchImpl, retrieval, retry })
   if (retrieveOnly) return { pages: hits, answer: null }
   let validIds
   if (hits.length === 0) {
@@ -145,7 +145,7 @@ export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fet
   if (!cfg) throw new Error('No LLM configured. Create ~/.llm-wiki/config.json with {"baseURL","apiKey","model"} (OpenAI-compatible).')
   // Injected fetchImpl (tests) is used as-is with no dispatcher; otherwise
   // pick the proxy-aware transport (undici fetch + agent, or global fetch).
-  const t = fetchImpl ? { fetchImpl, dispatcher: undefined } : await makeTransport()
+  const t = fetchImpl ? { fetchImpl, dispatcher: undefined, retry } : { ...(await makeTransport()), retry }
   let fallback = false
   if (hits.length === 0) {
     hits = await pickPagesFromListing(p, question, k, cfg, t, validIds)

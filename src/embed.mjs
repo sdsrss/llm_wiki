@@ -2,6 +2,7 @@ import { listWikiPages, isInvalidated } from './pages.mjs'
 import { loadLlmConfig, makeTransport } from './llm-config.mjs'
 import { sha256Text } from './hashing.mjs'
 import { normalize, pageEmbedText, loadVectorStore, saveVectorStore } from './vector.mjs'
+import { fetchWithRetry } from './retry.mjs'
 
 const BATCH = 64
 // Safety margin under the 8192-token input limit of common embedding models
@@ -44,12 +45,11 @@ function capEmbedText(text) {
 }
 
 export async function embedTexts(cfg, t, texts) {
-  const res = await t.fetchImpl(`${cfg.baseURL.replace(/\/$/, '')}/embeddings`, {
+  const res = await fetchWithRetry(t.fetchImpl, `${cfg.baseURL.replace(/\/$/, '')}/embeddings`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
     body: JSON.stringify({ model: cfg.embeddingModel, input: texts }),
-    ...(t.dispatcher ? { dispatcher: t.dispatcher } : {}),
-  })
+  }, { dispatcher: t.dispatcher, ...(t.retry ?? {}) })
   if (!res.ok) {
     let body = ''
     try { body = (await res.text()).slice(0, 200) } catch { /* status alone */ }
@@ -62,7 +62,7 @@ export async function embedTexts(cfg, t, texts) {
   return [...data.data].sort((a, b) => a.index - b.index).map(d => d.embedding)
 }
 
-export async function embedKb(kbRoot, { fetchImpl } = {}) {
+export async function embedKb(kbRoot, { fetchImpl, retry } = {}) {
   const cfg = loadLlmConfig(kbRoot)
   if (!cfg) throw new Error('No LLM configured. Create ~/.llm-wiki/config.json (OpenAI-compatible).')
   if (!cfg.embeddingModel) throw new Error('No embedding model configured. Add "embeddingModel" to your provider (or flat config) in ~/.llm-wiki/config.json, e.g. "text-embedding-3-small".')
@@ -84,7 +84,7 @@ export async function embedKb(kbRoot, { fetchImpl } = {}) {
   let dim = (prev && prev.model === cfg.embeddingModel) ? prev.dim : null
   let embedded = 0
   if (jobs.length > 0) {
-    const t = fetchImpl ? { fetchImpl, dispatcher: undefined } : await makeTransport()
+    const t = fetchImpl ? { fetchImpl, dispatcher: undefined, retry } : { ...(await makeTransport()), retry }
     for (let i = 0; i < jobs.length; i += BATCH) {
       const batch = jobs.slice(i, i + BATCH)
       const vecs = await embedTexts(cfg, t, batch.map(j => j.text))
@@ -96,6 +96,10 @@ export async function embedKb(kbRoot, { fetchImpl } = {}) {
         nextPages[j.relPath] = { hash: j.hash, vec: n }
         embedded++
       })
+      // Incremental durability: persist after each batch so a later batch failing
+      // (rate-limit, network) doesn't discard this batch's work — the re-run reuses
+      // it by hash (zero repeat API cost). saveVectorStore is atomic (temp+rename).
+      saveVectorStore(kbRoot, { model: cfg.embeddingModel, dim: dim ?? 0, pages: nextPages })
     }
   }
   const pruned = prev ? Object.keys(prev.pages).filter(id => !(id in nextPages)).length : 0

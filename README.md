@@ -92,13 +92,30 @@ npx @sdsrs/llm-wiki@0 ask "what did we decide about X?"
 | `graph` | query `graph.json` with `path` / `neighbors` / `hubs` (zero-LLM traversal) |
 | `embed` | compute/update page embeddings (`wiki/.vectors.json`) for optional vector location |
 | `export` | export the graph as GraphML, Cypher, JSON Canvas, or an interactive HTML viewer; or the wiki as standard-markdown copies |
+| `connect <projectDir>` | register a KB into a project's `CLAUDE.md` (sentinel block) so coding agents use it |
+| `install-skills` | copy the bundled `wiki-*` skills into a `.claude` directory |
 | `mcp` | run a read-only MCP server (stdio) over the KB |
 
-All commands take `--kb <dir>` (default `.`). `ask` supports `-k <n>` (pages to
-load) and `--retrieve-only` (locate pages without calling the LLM).
+Run `llm-wiki --version` to print the version. All commands take `--kb <dir>`
+(default `.`). `ask` supports `-k <n>` (pages to load) and `--retrieve-only`
+(locate pages without calling the LLM). `scan` supports `--exclude <pattern...>`
+and `--follow-symlinks` (follow symlinked source files that resolve outside the
+source dir — off by default, since such a link can read an arbitrary file into
+the KB).
 
 `scan` also warns when the source looks multi-domain (mixed-language files or
 dispersed wiki tags) and suggests splitting — one KB per domain.
+
+### Operational envelope
+
+llm-wiki targets **single-user, single-domain KBs at the hundreds-of-pages
+scale**. Within that envelope everything is in-memory and re-read per operation
+(no persistent index); there is no locking, so **do not run two writers against
+one KB concurrently** (a CLI build alongside a long-lived MCP server is fine —
+MCP is read-only). Source files above `maxFileBytes` (`wiki.config.json`, default
+50 MB) are skipped. `wiki/log.md` is append-only and not rotated. BM25 tokenizes
+CJK by single char + bigram and ASCII by word, so purely **kana/hangul** queries
+won't match — enable vector location for robust cross-language retrieval.
 
 ### Asking questions
 

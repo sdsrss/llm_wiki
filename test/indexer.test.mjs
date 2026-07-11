@@ -55,6 +55,36 @@ test('buildIndex collapses newlines in title/description (no line injection)', (
   assert.match(idx, /\[\[entities\/evil\]\] — clean - \[\[spoof\/page\]\] ## Injected/, 'newlines collapsed to spaces on one line')
 })
 
+// R19 (audit): topics/*.md are derived; a type emptying or a drop back below the
+// split threshold must not leave orphaned lists that exportMarkdownPages would copy.
+test('buildIndex prunes a stale topic file when its type empties', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ indexSplitAt: 1 }))
+  fs.writeFileSync(path.join(d, 'wiki/sources/a.md'), page('source', 'A'))
+  fs.writeFileSync(path.join(d, 'wiki/sources/b.md'), page('source', 'B'))
+  fs.writeFileSync(path.join(d, 'wiki/concepts/c.md'), page('concept', 'C'))
+  buildIndex(d) // 3 pages > 1 -> split
+  assert.ok(fs.existsSync(path.join(d, 'wiki/topics/concept.md')), 'concept topic written when split')
+  fs.rmSync(path.join(d, 'wiki/concepts/c.md'))
+  buildIndex(d) // concept type now empty
+  assert.ok(!fs.existsSync(path.join(d, 'wiki/topics/concept.md')), 'stale concept topic pruned')
+  assert.ok(fs.existsSync(path.join(d, 'wiki/topics/source.md')), 'live source topic kept')
+})
+
+test('buildIndex clears topics/ when a KB drops back below the split threshold', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ indexSplitAt: 1 }))
+  fs.writeFileSync(path.join(d, 'wiki/sources/a.md'), page('source', 'A'))
+  fs.writeFileSync(path.join(d, 'wiki/sources/b.md'), page('source', 'B'))
+  buildIndex(d) // 2 > 1 -> split
+  assert.ok(fs.existsSync(path.join(d, 'wiki/topics/source.md')))
+  fs.rmSync(path.join(d, 'wiki/sources/b.md'))
+  buildIndex(d) // 1 not > 1 -> inline, topics dropped
+  assert.ok(!fs.existsSync(path.join(d, 'wiki/topics/source.md')), 'topic files cleared when inlined')
+})
+
 test('buildIndex bounds the pending section and preserves user sections after it', (t) => {
   const d = tmp(t)
   initKb(d)

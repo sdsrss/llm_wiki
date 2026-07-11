@@ -156,11 +156,16 @@ test('llm-wiki mcp speaks MCP over stdio (initialize + tools/list)', async (t) =
   seedKb(d)
   const bin = path.resolve(fileURLToPath(import.meta.url), '../../bin/llm-wiki.mjs')
   const child = spawn(process.execPath, [bin, 'mcp', '--kb', d], { stdio: ['pipe', 'pipe', 'pipe'] })
-  t.after(() => child.kill())
+  const exited = new Promise(res => child.on('exit', res))
+  t.after(async () => { child.kill(); await exited }) // await exit so no zombie lingers
   const send = (msg) => child.stdin.write(JSON.stringify(msg) + '\n')
   const lines = []
-  let resolveReady
-  const ready = new Promise(r => { resolveReady = r })
+  let resolveReady, rejectReady
+  // Bound the wait: a child that never speaks must fail fast, not hang until the
+  // runner's global timeout (and leave the assertions below reading undefined).
+  const ready = new Promise((r, rej) => { resolveReady = r; rejectReady = rej })
+  const timer = setTimeout(() => rejectReady(new Error('mcp child did not respond within 10s')), 10000)
+  t.after(() => clearTimeout(timer))
   let buf = ''
   child.stdout.on('data', (chunk) => {
     buf += chunk.toString()
@@ -301,7 +306,7 @@ test('wiki_search degrades to BM25 results when the embedding call fails', async
   enableVectors(d)
   setLlmCfg(t, d)
   const fetchImpl = async () => ({ ok: false, status: 500, text: async () => 'boom' })
-  const client = await connectClient(t, d, { fetchImpl })
+  const client = await connectClient(t, d, { fetchImpl, retry: { retries: 0 } })
   const r = await client.callTool({ name: 'wiki_search', arguments: { query: '三层架构' } })
   assert.equal(r.isError ?? false, false, 'fail-open: not an MCP error')
   assert.match(r.content[0].text, /karpathy-gist/, 'BM25 hits still returned')
