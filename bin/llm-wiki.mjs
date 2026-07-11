@@ -11,7 +11,7 @@ import { askKb } from '../src/ask.mjs'
 import { lintKb } from '../src/lint.mjs'
 import { statusKb } from '../src/status.mjs'
 import { connectProject, installSkills } from '../src/connect.mjs'
-import { exportGraph, loadGraph } from '../src/export.mjs'
+import { exportGraph, loadGraph, exportMarkdownPages } from '../src/export.mjs'
 import { shortestPath, neighborhood, hubs } from '../src/graph.mjs'
 import { runMcpServer } from '../src/mcp.mjs'
 
@@ -124,11 +124,16 @@ program.command('install-skills')
   })
 
 program.command('export')
-  .description('export wiki/graph.json as GraphML, Cypher, or a self-contained HTML viewer')
+  .description('export wiki/graph.json (graphml | cypher | html) or a markdown-links copy of the wiki (markdown)')
   .option('--kb <dir>', 'knowledge base root', '.')
-  .requiredOption('--format <format>', 'graphml | cypher | html')
-  .option('--out <file>', 'output path (default: <kb>/graph.<ext>)')
+  .requiredOption('--format <format>', 'graphml | cypher | html | markdown')
+  .option('--out <file>', 'output path (default: <kb>/graph.<ext>, or <kb>/wiki-md/ for markdown)')
   .action((opts) => {
+    if (opts.format === 'markdown') {
+      const r = exportMarkdownPages(opts.kb, { out: opts.out })
+      console.log(`exported ${r.pageCount} pages with markdown links -> ${r.out}`)
+      return
+    }
     const r = exportGraph(opts.kb, { format: opts.format, out: opts.out })
     console.log(`exported ${r.nodeCount} nodes / ${r.edgeCount} edges -> ${r.out}`)
   })

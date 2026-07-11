@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
+import { listWikiPages } from './pages.mjs'
 
 const xmlEscape = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -24,6 +25,43 @@ export function loadGraph(kbRoot) {
     }
   }
   return graph
+}
+
+// Wikilink → standard-markdown-link conversion for tools that don't support
+// wikilinks (design doc §5: export-only — the wiki/ main format never changes).
+// fromDir is the exporting file's directory relative to the wiki root ('' for
+// index.md), so targets become correct relative paths. Known limitation:
+// wikilink-shaped text inside code fences is converted too — page bodies are
+// prose distilled from documents, not code, so this is acceptable.
+const WIKILINK_CONVERT_RE = /\[\[([^\]|#]+)(#[^\]|]*)?(?:\|([^\]]*))?\]\]/g
+
+export function wikilinksToMarkdown(body, fromDir = '') {
+  return body.replace(WIKILINK_CONVERT_RE, (_, target, anchor, label) => {
+    const t = target.trim().replace(/\.md$/, '')
+    const rel = path.relative(fromDir, `${t}.md`).split(path.sep).join('/')
+    return `[${label ?? t}](${rel}${anchor ?? ''})`
+  })
+}
+
+export function exportMarkdownPages(kbRoot, { out } = {}) {
+  const p = kbPaths(kbRoot)
+  const outDir = path.resolve(out ?? path.join(kbRoot, 'wiki-md'))
+  let pageCount = 0
+  const writeConverted = (srcAbs, relPath) => {
+    const dest = path.join(outDir, relPath)
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    const fromDir = path.dirname(relPath) === '.' ? '' : path.dirname(relPath)
+    fs.writeFileSync(dest, wikilinksToMarkdown(fs.readFileSync(srcAbs, 'utf8'), fromDir))
+    pageCount++
+  }
+  for (const pg of listWikiPages(kbRoot)) writeConverted(pg.abs, pg.relPath)
+  if (fs.existsSync(p.indexMd)) writeConverted(p.indexMd, 'index.md')
+  if (fs.existsSync(p.topics)) {
+    for (const f of fs.readdirSync(p.topics)) {
+      if (f.endsWith('.md')) writeConverted(path.join(p.topics, f), `topics/${f}`)
+    }
+  }
+  return { out: outDir, pageCount }
 }
 
 export function toGraphML(graph) {
@@ -171,7 +209,7 @@ const RENDERERS = { graphml: toGraphML, cypher: toCypher, html: toHtml }
 
 export function exportGraph(kbRoot, { format, out } = {}) {
   const render = RENDERERS[format]
-  if (!render) throw new Error(`unknown format: ${format} (expected ${Object.keys(RENDERERS).join(' | ')})`)
+  if (!render) throw new Error(`unknown format: ${format} (expected ${Object.keys(RENDERERS).join(' | ')} | markdown)`)
   const graph = loadGraph(kbRoot)
   const outPath = out ?? path.join(kbRoot, `graph.${format === 'graphml' ? 'graphml' : format === 'cypher' ? 'cypher' : 'html'}`)
   fs.writeFileSync(outPath, render(graph))

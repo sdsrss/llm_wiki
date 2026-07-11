@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { initKb } from '../src/init.mjs'
 import { buildIndex } from '../src/indexer.mjs'
-import { exportGraph, loadGraph, toGraphML, toCypher, toHtml } from '../src/export.mjs'
+import { exportGraph, loadGraph, toGraphML, toCypher, toHtml, wikilinksToMarkdown, exportMarkdownPages } from '../src/export.mjs'
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
@@ -103,4 +103,29 @@ test('exports carry edge confidence: GraphML d4 key, Cypher relationship propert
   const cy = toCypher(graph)
   assert.ok(cy.includes("MERGE (a)-[r:IMPLEMENTS]->(b) SET r.confidence = 'inferred';"))
   assert.ok(cy.includes('MERGE (a)-[r:WIKILINK]->(b);'), 'no SET clause without confidence')
+})
+
+test('wikilinksToMarkdown converts plain, aliased, anchored and .md-suffixed links relative to fromDir', () => {
+  const body = 'see [[entities/thing]] and [[entities/thing|The Thing]] and [[concepts/idea#h2]] and [[sources/doc.md]] and [[raw/doc.md]]'
+  const out = wikilinksToMarkdown(body, 'sources')
+  assert.match(out, /\[entities\/thing\]\(\.\.\/entities\/thing\.md\)/)
+  assert.match(out, /\[The Thing\]\(\.\.\/entities\/thing\.md\)/)
+  assert.match(out, /\[concepts\/idea\]\(\.\.\/concepts\/idea\.md#h2\)/)
+  assert.match(out, /\[sources\/doc\]\(doc\.md\)/, 'same-dir link, .md-suffix normalized in label and path')
+  assert.match(out, /\[raw\/doc\]\(\.\.\/raw\/doc\.md\)/, 'raw link resolves against the sibling raw/ layer')
+  assert.ok(!out.includes('[['), 'no wikilinks remain')
+  assert.equal(wikilinksToMarkdown('no links here', ''), 'no links here')
+})
+
+test('exportMarkdownPages mirrors the wiki layout with converted links and preserved frontmatter', (t) => {
+  const d = seedKb(t)
+  const r = exportMarkdownPages(d, {})
+  assert.equal(r.out, path.resolve(d, 'wiki-md'))
+  assert.equal(r.pageCount, 3, '2 pages + index.md')
+  const doc = fs.readFileSync(path.join(d, 'wiki-md/sources/doc.md'), 'utf8')
+  assert.match(doc, /\[entities\/thing\]\(\.\.\/entities\/thing\.md\)/)
+  assert.match(doc, /^---\ntype: source/, 'frontmatter preserved verbatim')
+  const idx = fs.readFileSync(path.join(d, 'wiki-md/index.md'), 'utf8')
+  assert.ok(!idx.includes('[['), 'index.md wikilinks converted (root-relative, no ../ prefix)')
+  assert.match(idx, /\(sources\/doc\.md\)/)
 })
