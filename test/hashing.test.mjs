@@ -21,7 +21,19 @@ test('minhash: near-duplicates score high, unrelated score low', () => {
   for (let i = 0; i < 40; i++) otherParts.push('条目' + i + '：数据库索引优化与查询计划分析，涵盖第' + i + '类扫描代价评估。')
   const other = otherParts.join('')
   const s1 = minhashSignature(base)
-  assert.equal(s1.length, 32)
+  assert.equal(s1.length, 128)
   assert.ok(jaccardEstimate(s1, minhashSignature(near)) > 0.8)
   assert.ok(jaccardEstimate(s1, minhashSignature(other)) < 0.3)
+})
+
+test('minhash: a true-~0.90 near-duplicate clears the 0.85 threshold at the default perm count (QA73-002)', () => {
+  // Regression for QA73-002: this pair's true Jaccard is 0.898, but at 32 perms the
+  // estimate was 0.844 (< NEAR_DUP_THRESHOLD 0.85) and the near-dup was silently missed.
+  // The default perm count must stay high enough that a genuine near-duplicate is detected.
+  const lines = []
+  for (let i = 0; i < 60; i++) lines.push('sentence number ' + i + ' about distributed systems and consensus protocols')
+  const a = '# Doc\n' + lines.join('\n') + '\n'
+  const b = a + 'EXTRA trailing line added here only\n'
+  assert.ok(jaccardEstimate(minhashSignature(a), minhashSignature(b)) >= 0.85,
+    'default-perm minhash must estimate a true-0.90 pair at or above the 0.85 threshold')
 })

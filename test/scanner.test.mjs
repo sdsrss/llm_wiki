@@ -26,6 +26,21 @@ test('worstCaseTokens is pessimistic vs estimateTokens', () => {
   assert.ok(worstCaseTokens('x'.repeat(1000)) > estimateTokens('x'.repeat(1000)), 'always >= the nominal estimate')
 })
 
+test('scanSource flags a genuine near-duplicate that 32-perm minhash under-estimated (QA73-002)', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  // true Jaccard 0.898 — a near-dup a user would want flagged. At 32 perms the estimate
+  // fell to 0.844 (< 0.85) and this pair was reported as `near: 0`; at the current perm
+  // count it must be detected.
+  const lines = Array.from({ length: 60 }, (_, i) => `sentence number ${i} about distributed systems and consensus protocols`)
+  fs.writeFileSync(path.join(src, 'orig.md'), '# Doc\n' + lines.join('\n') + '\n')
+  fs.writeFileSync(path.join(src, 'near.md'), '# Doc\n' + lines.join('\n') + '\nEXTRA trailing line added here only\n')
+  const r = await scanSource(src, kb, {})
+  assert.equal(r.duplicates.exact.length, 0, 'the pair is not an exact duplicate')
+  assert.ok(r.duplicates.near.some(([a, b]) => [a, b].includes('orig.md') && [a, b].includes('near.md')),
+    'a true-0.90 near-duplicate must be flagged, not missed')
+})
+
 test('scanSource: dedup, batching, plan file', async (t) => {
   const src = tmp(t), kb = tmp(t)
   initKb(kb)
