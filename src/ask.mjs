@@ -64,13 +64,16 @@ export function fuseChannels({ bm25, vector }, k, { lexicalGuard = true } = {}) 
 // Three modes. 'auto' (default): BM25 always; vector channel only when opted
 // in (vectorEnabled) AND the sidecar exists AND an embeddingModel is
 // configured — fail-open, any vector error degrades to BM25 with a single
-// stderr warning. 'bm25': lexical only, returns before any vector access.
+// stderr warning. When both channels run but return disjoint top-k page sets,
+// the lexicalGuard (config, default on) drops BM25 and ranks vector-only so a
+// cross-language query's lexical noise cannot displace correct semantic hits.
+// 'bm25': lexical only, returns before any vector access.
 // 'hybrid': explicit BM25+vector fusion — every missing prerequisite (and any
 // vector error) throws instead of degrading, and vectorEnabled is ignored.
 export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieval = 'auto', retry } = {}) {
   if (!['auto', 'bm25', 'hybrid'].includes(retrieval)) throw new Error(`unknown retrieval mode: ${retrieval}`)
   const bm25 = retrievePages(kbRoot, question, k)
-  const asBm25 = () => ({ hits: bm25.map(h => ({ ...h, sources: ['bm25'] })), usedVector: false })
+  const asBm25 = () => ({ hits: bm25.map(h => ({ ...h, sources: ['bm25'] })), usedVector: false, guardApplied: false })
   if (retrieval === 'bm25') return asBm25()
   // 'hybrid' is an explicit request: prerequisites failing is an error, not a
   // silent degrade. 'auto' keeps the opt-in + fail-open contract unchanged.
@@ -97,7 +100,9 @@ export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieva
     // ENOENTs reading a vanished file).
     const valid = new Set(listWikiPages(kbRoot).filter(pg => !pg.error && !isInvalidated(pg)).map(pg => pg.relPath))
     const vecHitsValid = vecHits.filter(h => valid.has(h.relPath))
-    return { hits: rrfFuse([{ source: 'bm25', hits: bm25 }, { source: 'vector', hits: vecHitsValid }], k), usedVector: true }
+    const { hits, guardApplied } = fuseChannels({ bm25, vector: vecHitsValid }, k,
+      { lexicalGuard: retrieval === 'auto' && loadKbConfig(kbRoot).lexicalGuard })
+    return { hits, usedVector: true, guardApplied }
   } catch (err) {
     if (retrieval === 'hybrid') throw err
     process.stderr.write(`warning: vector retrieval unavailable (${err.message}); falling back to BM25\n`)

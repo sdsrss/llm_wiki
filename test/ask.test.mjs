@@ -544,6 +544,68 @@ test('locatePages ignores a vector store built by a different embeddingModel (si
     'silent gate — not the fail-open warning path')
 })
 
+// Helper factory used by the guard integration tests below.
+function seedKbWithVectors(t) {
+  const d = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true }))
+  saveVectorStore(d, { model: 'emb-1', dim: 2, pages: {
+    'sources/karpathy-gist.md': { hash: 'h', vec: [1, 0] },
+    'sources/other.md': { hash: 'h', vec: [0, 1] },
+  } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-1' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  return d
+}
+// embedding always points the query at karpathy-gist ([1,0])
+const embedToKarpathy = async () => ({ ok: true, json: async () => ({ data: [{ index: 0, embedding: [1, 0] }] }) })
+
+test('locatePages auto: disjoint channels fire the guard, vector-only ranking', async (t) => {
+  const d = seedKbWithVectors(t)
+  // BM25("数据库索引") -> only other.md; vector -> karpathy-gist. Disjoint.
+  const r = await locatePages(d, '数据库索引', { fetchImpl: embedToKarpathy })
+  assert.equal(r.usedVector, true)
+  assert.equal(r.guardApplied, true)
+  assert.equal(r.hits[0].relPath, 'sources/karpathy-gist.md')
+  assert.deepEqual(r.hits[0].sources, ['vector'])
+})
+
+test('locatePages auto: overlapping channels do not fire the guard', async (t) => {
+  const d = seedKbWithVectors(t)
+  // BM25("三层架构") -> karpathy-gist; vector -> karpathy-gist too. Overlap.
+  const r = await locatePages(d, '三层架构', { fetchImpl: embedToKarpathy })
+  assert.equal(r.guardApplied, false)
+  assert.ok(r.hits[0].sources.includes('bm25') && r.hits[0].sources.includes('vector'))
+})
+
+test('locatePages hybrid: guard never fires even when disjoint (pure RRF preserved)', async (t) => {
+  const d = seedKbWithVectors(t)
+  const r = await locatePages(d, '数据库索引', { retrieval: 'hybrid', fetchImpl: embedToKarpathy })
+  assert.equal(r.guardApplied, false)
+  // both channels' pages survive the fuse
+  assert.ok(r.hits.some(h => h.relPath === 'sources/other.md'))
+  assert.ok(r.hits.some(h => h.relPath === 'sources/karpathy-gist.md'))
+})
+
+test('locatePages auto: lexicalGuard=false restores pure RRF', async (t) => {
+  const d = seedKbWithVectors(t)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true, lexicalGuard: false }))
+  const r = await locatePages(d, '数据库索引', { fetchImpl: embedToKarpathy })
+  assert.equal(r.guardApplied, false)
+  assert.ok(r.hits.some(h => h.relPath === 'sources/other.md'))
+})
+
+test('locatePages pure-BM25 path reports guardApplied false', async (t) => {
+  const d = tmp(t)
+  seedKb(d) // no vectorEnabled -> never reaches fusion
+  const r = await locatePages(d, '三层架构有哪些')
+  assert.equal(r.usedVector, false)
+  assert.equal(r.guardApplied, false)
+})
+
 test('makeTransport: global fetch without proxy, undici fetch + dispatcher with proxy', async (t) => {
   const PROXY_VARS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']
   const saved = Object.fromEntries(PROXY_VARS.map(v => [v, process.env[v]]))
