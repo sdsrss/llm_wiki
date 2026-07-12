@@ -70,7 +70,7 @@ const rows = []
 for (const p of retrievalProbes) {
   let qn = null
   if (needVec) {
-    const [qv] = await embedTexts(cfg, t, [p.q])
+    const [qv] = await embedTexts(cfg, t, [p.q], { role: 'query' })
     qn = normalize(qv)
   }
   for (const arm of arms) {
