@@ -144,6 +144,22 @@ similarity (RRF); `--retrieve-only` labels each hit `[bm25]`, `[vector]` or
 `[bm25+vector]`. Vectors only *locate* pages — context is still whole pages,
 never chunks. Any vector-path failure falls back to BM25 with a warning.
 
+### Local / offline embedding
+
+Vector retrieval normally calls an embedding API. To run it locally with no API key:
+
+1. Install the optional model runtime: `npm i @huggingface/transformers`
+2. In `~/.llm-wiki/config.json`, set a `local:` embedding model:
+   ```json
+   { "embeddingModel": "local:Xenova/multilingual-e5-small" }
+   ```
+3. `llm-wiki embed --kb ./kb` — the first run downloads the model (~120 MB).
+
+The default `Xenova/multilingual-e5-small` is multilingual, so cross-language
+(zh↔en) retrieval keeps working. With only a local embedding model configured,
+`embed`, `search`, and `ask --retrieve-only` run fully offline; generating an
+answer with `ask` still needs a chat provider.
+
 ### Graph queries
 
 `graph.json` (rebuilt by `index`) is a link graph over the pages — wikilinks,

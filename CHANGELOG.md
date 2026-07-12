@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.0 (unreleased)
+
+**Added:**
+
+- **Local / offline embedding via transformers.js.** Set `"embeddingModel":
+  "local:Xenova/multilingual-e5-small"` in `~/.llm-wiki/config.json` and install the
+  optional `@huggingface/transformers` to generate and query vectors with no embedding
+  API. With only a local model configured, `embed` / `search` / `ask --retrieve-only`
+  run fully offline (answering with `ask` still needs a chat provider). The default
+  model is multilingual, so zh↔en cross-language retrieval is preserved. The dependency
+  is optional — the base install is unchanged.
+
 ## 0.8.3 (2026-07-12)
 
 Performance and test-hardening cleanup; no shipped behavior change. Suite 261 → 263.
