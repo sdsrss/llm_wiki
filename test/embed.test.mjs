@@ -122,7 +122,7 @@ test('embedKb without embeddingModel fails with actionable message', async (t) =
   const d = tmp(t)
   initKb(d)
   setCfg(t, d, { baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm' })
-  await assert.rejects(() => embedKb(d), /No usable embedding config.*embeddingModel/s)
+  await assert.rejects(() => embedKb(d), /No embedding model configured.*embeddingModel/s)
 })
 
 test('embedKb is incremental: reuses unchanged, prunes removed/invalidated, re-embeds on model change', async (t) => {

@@ -22,7 +22,14 @@ export function stripLocalPrefix(m) {
 // user to re-install transformers then hides the real missing module. Pass those
 // through so their message names the actual culprit.
 export function friendlyImportError(err) {
-  if (err?.code === 'ERR_MODULE_NOT_FOUND' && /@huggingface\/transformers/.test(err.message ?? '')) {
+  if (err?.code !== 'ERR_MODULE_NOT_FOUND') return err
+  // Gate on the MISSING package — the quoted name after "Cannot find package/module" —
+  // NOT a substring of the whole message. A transitive failure names its real culprit
+  // in the quotes (e.g. 'onnxruntime-node') yet still mentions "@huggingface/transformers"
+  // in the "imported from <path>" tail, so a whole-message test mis-maps it. Rewrite only
+  // when the absent module IS transformers.js (the package root or a subpath import of it).
+  const missing = /Cannot find (?:package|module) '([^']+)'/.exec(err.message ?? '')?.[1]
+  if (missing && /^@huggingface\/transformers(\/|$)/.test(missing)) {
     return new Error('local embedding needs @huggingface/transformers; run: npm i @huggingface/transformers')
   }
   return err

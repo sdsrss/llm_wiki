@@ -76,7 +76,7 @@ export async function embedTexts(cfg, t, texts, { role = 'passage' } = {}) {
 
 export async function embedKb(kbRoot, { fetchImpl, retry, pipelineFactory } = {}) {
   const cfg = loadEmbedConfig(kbRoot)
-  if (!cfg?.embeddingModel) throw new Error('No usable embedding config. A remote embeddingModel needs chat credentials (baseURL/apiKey) in ~/.llm-wiki/config.json; a local one needs none — set "embeddingModel": "local:Xenova/multilingual-e5-small".')
+  if (!cfg?.embeddingModel) throw new Error('No embedding model configured. Set "embeddingModel" in ~/.llm-wiki/config.json — a remote one (e.g. "text-embedding-3-small") also needs the provider baseURL/apiKey; a local one (e.g. "local:Xenova/multilingual-e5-small") needs no credentials.')
   const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
   const prev = loadVectorStore(kbRoot)
   const reuse = (prev && prev.model === cfg.embeddingModel) ? prev.pages : {}

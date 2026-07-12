@@ -14,9 +14,12 @@ test('friendlyImportError maps ONLY a missing top-level transformers dep, passes
     new Error("Cannot find package '@huggingface/transformers' imported from x"), { code: 'ERR_MODULE_NOT_FOUND' }))
   assert.match(missing.message, /npm i @huggingface\/transformers/)
   // A transitive dep of transformers.js failing (transformers.js itself IS installed)
-  // must NOT be masked as "install transformers" — pass it through unchanged.
+  // must NOT be masked as "install transformers" — pass it through unchanged. The
+  // importer path DOES contain "@huggingface/transformers", so a whole-message regex
+  // would wrongly match here: the fixture uses a realistic path to guard that.
   const transitive = Object.assign(
-    new Error("Cannot find package 'onnxruntime-node' imported from x"), { code: 'ERR_MODULE_NOT_FOUND' })
+    new Error("Cannot find package 'onnxruntime-node' imported from /app/node_modules/@huggingface/transformers/dist/backends/onnx.js"),
+    { code: 'ERR_MODULE_NOT_FOUND' })
   assert.equal(friendlyImportError(transitive), transitive, 'transitive ERR_MODULE_NOT_FOUND passes through')
   const other = new Error('boom')
   assert.equal(friendlyImportError(other), other)

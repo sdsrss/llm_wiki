@@ -177,7 +177,7 @@ test('embed exits with a clear error when no LLM/embeddingModel is configured', 
   fs.mkdirSync(env.LLM_WIKI_CONFIG_DIR)
   const r = spawnSync(process.execPath, [BIN, 'embed', '--kb', d], { encoding: 'utf8', env })
   assert.equal(r.status, 1, 'no provider → exit 1')
-  assert.match(r.stderr, /No (LLM configured|usable embedding config)/i)
+  assert.match(r.stderr, /No (LLM configured|embedding model configured)/i)
 })
 
 test('convert exits non-zero when every file fails but stays 0 on partial success', (t) => {
