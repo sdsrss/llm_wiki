@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.7.4 (2026-07-12)
+
+Two robustness fixes surfaced by an adversarial QA pass over the CLI. No config
+schema change, no KB migration, no retrieval-default change. Suite 230 → 234.
+
+**Fixes:**
+
+- **`index` warns when a page is skipped for invalid frontmatter.** `buildIndex`
+  silently excluded any page with unparseable YAML frontmatter from
+  `index.md`/`graph.json`/`llms.txt`. Because the docs route hand-editors to
+  `index` (not `lint`) after editing, a broken-YAML edit made the page vanish
+  from every query surface with no signal — `indexed N pages`, exit 0, nothing
+  else. `buildIndex` now returns the skipped pages and the CLI prints a one-line
+  stderr warning naming them and pointing at `lint`; stdout stays the clean
+  count, and `lint` still owns the detailed per-page report.
+- **`scan` near-duplicate detection uses 128 minhash permutations (was 32).**
+  Near-dup similarity was estimated from a 32-permutation minhash and compared
+  against the 0.85 threshold, but at 32 perms the estimate's standard error
+  (~0.05) let a genuine near-duplicate (true Jaccard 0.898) estimate 0.844 and
+  be reported as `near: 0`. 128 perms tightens the estimate (SD ~0.026) so real
+  near-dups clear the threshold; the cost is trivial next to the per-file
+  sha256+read scan already does, and the signature is stripped before the plan
+  is persisted (no on-disk change).
+
 ## 0.7.3 (2026-07-12)
 
 Two robustness fixes from the final targeted dogfooding sweep. No config schema
