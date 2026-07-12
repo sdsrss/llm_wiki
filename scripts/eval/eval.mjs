@@ -4,7 +4,7 @@
 // plus an embeddingModel in ~/.llm-wiki/config.json.
 import fs from 'node:fs'
 import path from 'node:path'
-import { retrievePages, rrfFuse } from '../../src/ask.mjs'
+import { retrievePages, rrfFuse, fuseChannels } from '../../src/ask.mjs'
 import { loadVectorStore, normalize, cosineTopK } from '../../src/vector.mjs'
 import { embedTexts } from '../../src/embed.mjs'
 import { loadLlmConfig, makeTransport } from '../../src/llm-config.mjs'
@@ -76,6 +76,10 @@ for (const p of retrievalProbes) {
       const bm = retrievePages(kb, p.q, k)
       const vec = (qn ? cosineTopK(qn, store, k) : []).map(v => ({ relPath: v.id }))
       got = rrfFuse([{ source: 'bm25', hits: bm }, { source: 'vector', hits: vec }], k).map(h => strip(h.relPath))
+    } else if (arm === 'auto') {
+      const bm = retrievePages(kb, p.q, k)
+      const vec = (qn ? cosineTopK(qn, store, k) : []).map(v => ({ relPath: v.id }))
+      got = fuseChannels({ bm25: bm, vector: vec }, k, { lexicalGuard: true }).hits.map(h => strip(h.relPath))
     } else if (arm === 'graph') {
       const bm = retrievePages(kb, p.q, k)
       const vec = (qn ? cosineTopK(qn, store, k) : []).map(v => ({ relPath: v.id }))
