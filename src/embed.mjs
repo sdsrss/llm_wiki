@@ -120,7 +120,11 @@ export async function embedKb(kbRoot, { fetchImpl, retry, pipelineFactory } = {}
     const injected = fetchImpl || pipelineFactory
     const t = injected
       ? { fetchImpl, dispatcher: undefined, retry, pipelineFactory }
-      : { ...(await makeTransport()), retry }
+      // A local model makes no network call (embedLocal ignores the transport), so
+      // skip makeTransport — it would import undici / build a proxy agent for nothing.
+      : local
+        ? { retry }
+        : { ...(await makeTransport()), retry }
     for (let i = 0; i < jobs.length; i += BATCH) {
       const batch = jobs.slice(i, i + BATCH)
       const vecs = await embedTexts(cfg, t, batch.map(j => j.text))

@@ -23,12 +23,36 @@ function resolveProviders(fileCfg) {
   return null
 }
 
-export function loadLlmConfig(kbRoot) {
+// The embeddingModel a credential-less (local) config would use: the flat top-level
+// form wins, else the first provider IN PRIORITY ORDER that declares one — the same
+// ordering resolveProviders uses, so the chat and embed paths can't disagree on which
+// provider wins. Only file-configured providers are scanned (BUILTIN declares none).
+function resolveEmbeddingModel(fileCfg) {
+  if (typeof fileCfg.embeddingModel === 'string') return fileCfg.embeddingModel
+  const { priority, providers } = fileCfg
+  if (!providers) return null
+  for (const name of priority ?? Object.keys(providers)) {
+    const em = providers[name]?.embeddingModel
+    if (em) return em
+  }
+  return null
+}
+
+// Read ~/.llm-wiki/config.json once per entry point. redactContents: this file holds
+// API keys — a corrupt-JSON error must not echo a fragment of it to the terminal.
+function readGlobalConfig() {
   const dir = process.env.LLM_WIKI_CONFIG_DIR ?? path.join(os.homedir(), '.llm-wiki')
   const globalFile = path.join(dir, 'config.json')
-  // redactContents: this file holds API keys — a corrupt-JSON error must not
-  // echo a fragment of it to the terminal.
-  const fileCfg = fs.existsSync(globalFile) ? readJsonFile(globalFile, { redactContents: true }) : {}
+  return fs.existsSync(globalFile) ? readJsonFile(globalFile, { redactContents: true }) : {}
+}
+
+export function loadLlmConfig(kbRoot) {
+  return loadChatConfig(kbRoot, readGlobalConfig())
+}
+
+// Resolve a chat-complete config from an already-read global fileCfg (+ the KB's
+// optional llm override). Returns null unless baseURL/apiKey/model are all present.
+function loadChatConfig(kbRoot, fileCfg) {
   // flat form: explicit custom endpoint wins outright
   let cfg = (fileCfg.baseURL && fileCfg.apiKey && fileCfg.model)
     ? { baseURL: fileCfg.baseURL, apiKey: fileCfg.apiKey, model: fileCfg.model, ...(fileCfg.embeddingModel ? { embeddingModel: fileCfg.embeddingModel } : {}) }
@@ -72,14 +96,10 @@ export function loadLlmConfig(kbRoot) {
 // call the API, so it resolves only when loadLlmConfig does. loadLlmConfig's own
 // (chat-complete-or-null) contract is unchanged.
 export function loadEmbedConfig(kbRoot) {
-  const chat = loadLlmConfig(kbRoot)
+  const fileCfg = readGlobalConfig()
+  const chat = loadChatConfig(kbRoot, fileCfg)
   if (chat?.embeddingModel) return chat
-  const dir = process.env.LLM_WIKI_CONFIG_DIR ?? path.join(os.homedir(), '.llm-wiki')
-  const globalFile = path.join(dir, 'config.json')
-  if (!fs.existsSync(globalFile)) return null
-  const fileCfg = readJsonFile(globalFile, { redactContents: true })
-  const em = fileCfg.embeddingModel
-    ?? Object.values(fileCfg.providers ?? {}).map(p => p?.embeddingModel).find(Boolean)
+  const em = resolveEmbeddingModel(fileCfg)
   return (typeof em === 'string' && em.startsWith('local:')) ? { embeddingModel: em } : null
 }
 

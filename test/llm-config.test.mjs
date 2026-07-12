@@ -36,4 +36,17 @@ test('loadEmbedConfig: local model needs no chat creds; remote still needs them'
     baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'text-embedding-3-small',
   }))
   assert.equal(loadEmbedConfig(kb)?.embeddingModel, 'text-embedding-3-small')
+
+  // (d) provider-level local embeddingModel is scanned in PRIORITY order, not
+  // insertion order — so it agrees with resolveProviders on which provider wins.
+  // Here priority puts `beta` first though `alpha` is declared first; the old
+  // Object.values scan would have returned alpha's model.
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({
+    priority: ['beta', 'alpha'],
+    providers: {
+      alpha: { baseURL: 'https://a.invalid/v1', apiKeyEnv: 'UNSET_A', embeddingModel: 'local:model-alpha' },
+      beta: { baseURL: 'https://b.invalid/v1', apiKeyEnv: 'UNSET_B', embeddingModel: 'local:model-beta' },
+    },
+  }))
+  assert.equal(loadEmbedConfig(kb)?.embeddingModel, 'local:model-beta', 'priority-first provider wins the embeddingModel scan')
 })

@@ -8,6 +8,7 @@ import { worstCaseTokens } from './scanner.mjs'
 import { loadLlmConfig, loadEmbedConfig, makeTransport } from './llm-config.mjs'
 import { loadVectorStore, normalize, cosineTopK } from './vector.mjs'
 import { embedTexts } from './embed.mjs'
+import { isLocalModel } from './local-embed.mjs'
 import { fetchWithRetry } from './retry.mjs'
 
 // Two per-KB caches, both keyed by a cheap page-set freshness token so neither can
@@ -149,7 +150,11 @@ export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieva
     const injected = fetchImpl || pipelineFactory
     const t = injected
       ? { fetchImpl, dispatcher: undefined, retry, pipelineFactory }
-      : { ...(await makeTransport()), retry }
+      // A local query embedding makes no network call (embedLocal ignores the
+      // transport), so skip makeTransport — no undici import / proxy agent for nothing.
+      : isLocalModel(cfg.embeddingModel)
+        ? { retry }
+        : { ...(await makeTransport()), retry }
     const [qv] = await embedTexts(cfg, t, [question], { role: 'query' })
     const qn = normalize(qv)
     const vecHits = qn ? cosineTopK(qn, store, k).map(v => ({ relPath: v.id, score: v.score })) : []
