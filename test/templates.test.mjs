@@ -46,6 +46,30 @@ test('loadKbConfig merges defaults and names the file on corrupt JSON', (t) => {
   assert.throws(() => loadKbConfig(d), /wiki\.config\.json: invalid JSON/)
 })
 
+// A user can type any JSON type for any key (shallow merge). Numeric keys are
+// consumed as scalars — Array(n) length, `i += stride` loop, threshold compare —
+// so a string/0/negative there crashes (Array(NaN)), hangs (batchSize:0 spins),
+// or mis-gates. loadKbConfig must normalize each numeric key back to its default.
+test('loadKbConfig coerces malformed numeric config back to defaults', (t) => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
+  t.after(() => fs.rmSync(d, { recursive: true, force: true }))
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({
+    bm25TitleWeight: 'high',   // non-numeric string -> Array(NaN) RangeError at consumer
+    batchSize: 0,              // stride 0 -> `i += 0` infinite loop in scanSource
+    askTokenBudget: -5,        // negative budget is nonsense
+    conceptThreshold: 'x',     // object/string threshold never compares true
+    indexSplitAt: 7,           // a legitimate override survives untouched
+  }))
+  const cfg = loadKbConfig(d)
+  assert.equal(cfg.bm25TitleWeight, DEFAULT_CONFIG.bm25TitleWeight, 'non-numeric -> default')
+  assert.equal(cfg.batchSize, DEFAULT_CONFIG.batchSize, '0 stride -> default (no hang)')
+  assert.equal(cfg.askTokenBudget, DEFAULT_CONFIG.askTokenBudget, 'negative -> default')
+  assert.equal(cfg.conceptThreshold, DEFAULT_CONFIG.conceptThreshold, 'string -> default')
+  assert.equal(cfg.indexSplitAt, 7, 'a valid numeric override is preserved')
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ bm25TitleWeight: 3.9 }))
+  assert.equal(loadKbConfig(d).bm25TitleWeight, 3, 'fractional override is truncated to an integer')
+})
+
 test('kbPaths derives every path from a fixed layout', () => {
   const p = kbPaths('/kb')
   assert.equal(p.raw, '/kb/raw')

@@ -15,7 +15,9 @@ export function retrievePages(kbRoot, question, k = 6) {
   // title term outweighs the same term buried in the body (measured +0.04 Recall@5
   // on the dogfood KB at ×3). Set bm25TitleWeight: 1 in wiki.config.json to restore
   // flat single-field indexing.
-  const w = Math.max(1, Math.trunc(loadKbConfig(kbRoot).bm25TitleWeight ?? 1))
+  // loadKbConfig guarantees a finite integer >= 1; cap the upper bound so a large
+  // value can't materialize a giant per-page array (Array(w).fill) and OOM retrieval.
+  const w = Math.min(25, loadKbConfig(kbRoot).bm25TitleWeight)
   const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
   const idx = buildBm25Index(pages.map(p => ({
     id: p.relPath,

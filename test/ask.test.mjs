@@ -47,6 +47,19 @@ test('retrievePages survives a page whose tags are a bare scalar (no join crash)
   assert.ok(hits.some(h => h.relPath === 'entities/scalar.md'), 'the malformed page is still indexed by its body')
 })
 
+test('retrievePages survives a non-numeric bm25TitleWeight config (no Array(NaN) crash)', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  // `bm25TitleWeight: "high"` reaches retrievePages as a string; before the config
+  // coercion it hit `Array(Math.trunc(NaN))` -> Range: Invalid array length, DoSing
+  // every ask/search/MCP query against the KB. loadKbConfig now floors it to default.
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ bm25TitleWeight: 'high' }))
+  fs.writeFileSync(path.join(d, 'wiki/concepts/cache.md'),
+    `---\ntype: concept\ntitle: Cache\ndescription: d\ntags: [cache]\nsources: [raw/a.md]\ncreated: 2026-07-12\nupdated: 2026-07-12\n---\n\nbody about caching`)
+  const hits = retrievePages(d, 'cache', 5)
+  assert.ok(hits.some(h => h.relPath === 'concepts/cache.md'), 'retrieval works instead of throwing RangeError')
+})
+
 // R21 (audit): title is a weighted field — a term in a title should outrank the same
 // term buried in another page's body once bm25TitleWeight > 1.
 test('retrievePages boosts title matches per bm25TitleWeight', (t) => {

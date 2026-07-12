@@ -17,12 +17,28 @@ export const DEFAULT_CONFIG = {
   relationTypes: ['implements', 'uses', 'depends_on', 'part_of', 'instance_of', 'derived_from', 'contrasts_with', 'causes'],
 }
 
+// Keys whose default is a number are consumed as scalars — an Array(n) length
+// (bm25TitleWeight), a loop stride (batchSize), or a threshold comparison. Because
+// wiki.config.json is shallow-merged as-is (any JSON type per key), a scalar there
+// can be a string/object/NaN/0/negative, which crashes (`Array(NaN)` RangeError),
+// hangs (`i += 0` never advances the batch loop), or silently disables a gate.
+const NUMERIC_KEYS = Object.keys(DEFAULT_CONFIG).filter((k) => typeof DEFAULT_CONFIG[k] === 'number')
+
 // Single reader for wiki.config.json (defaults merged) — every consumer used
 // to inline this parse, each with its own bare-SyntaxError failure mode.
 export function loadKbConfig(kbRoot) {
   const p = kbPaths(kbRoot)
-  if (!fs.existsSync(p.config)) return DEFAULT_CONFIG
-  return { ...DEFAULT_CONFIG, ...readJsonFile(p.config) }
+  if (!fs.existsSync(p.config)) return { ...DEFAULT_CONFIG }
+  const merged = { ...DEFAULT_CONFIG, ...readJsonFile(p.config) }
+  // Coerce every numeric key back to a usable finite integer >= 1; fall back to the
+  // default on anything a user could type that isn't one. Every DEFAULT is itself a
+  // positive integer, so a legitimate override is untouched — only malformed values
+  // (which would crash/hang/mis-gate a consumer) are normalized away.
+  for (const k of NUMERIC_KEYS) {
+    const n = Math.trunc(Number(merged[k]))
+    merged[k] = Number.isFinite(n) && n >= 1 ? n : DEFAULT_CONFIG[k]
+  }
+  return merged
 }
 
 export function agentsMdTemplate(cfg) {
