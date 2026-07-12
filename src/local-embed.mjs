@@ -16,9 +16,13 @@ export function stripLocalPrefix(m) {
 }
 
 // A missing optional dependency surfaces as ERR_MODULE_NOT_FOUND — turn it into an
-// actionable instruction instead of an opaque stack. Other errors pass through.
+// actionable instruction instead of an opaque stack. Only map it when the ABSENT
+// module is transformers.js itself: the same code fires when transformers.js IS
+// installed but one of its (transitive/native) deps fails to resolve, and telling the
+// user to re-install transformers then hides the real missing module. Pass those
+// through so their message names the actual culprit.
 export function friendlyImportError(err) {
-  if (err?.code === 'ERR_MODULE_NOT_FOUND') {
+  if (err?.code === 'ERR_MODULE_NOT_FOUND' && /@huggingface\/transformers/.test(err.message ?? '')) {
     return new Error('local embedding needs @huggingface/transformers; run: npm i @huggingface/transformers')
   }
   return err

@@ -9,9 +9,15 @@ test('isLocalModel / stripLocalPrefix recognize the local: marker', () => {
   assert.equal(stripLocalPrefix('local:Xenova/multilingual-e5-small'), 'Xenova/multilingual-e5-small')
 })
 
-test('friendlyImportError maps a missing optional dep, passes others through', () => {
-  const missing = friendlyImportError(Object.assign(new Error('x'), { code: 'ERR_MODULE_NOT_FOUND' }))
+test('friendlyImportError maps ONLY a missing top-level transformers dep, passes others through', () => {
+  const missing = friendlyImportError(Object.assign(
+    new Error("Cannot find package '@huggingface/transformers' imported from x"), { code: 'ERR_MODULE_NOT_FOUND' }))
   assert.match(missing.message, /npm i @huggingface\/transformers/)
+  // A transitive dep of transformers.js failing (transformers.js itself IS installed)
+  // must NOT be masked as "install transformers" — pass it through unchanged.
+  const transitive = Object.assign(
+    new Error("Cannot find package 'onnxruntime-node' imported from x"), { code: 'ERR_MODULE_NOT_FOUND' })
+  assert.equal(friendlyImportError(transitive), transitive, 'transitive ERR_MODULE_NOT_FOUND passes through')
   const other = new Error('boom')
   assert.equal(friendlyImportError(other), other)
 })
