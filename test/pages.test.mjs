@@ -35,6 +35,10 @@ test('parseFrontmatter extracts data and body', () => {
 test('parseFrontmatter flags bad yaml and missing frontmatter', () => {
   assert.equal(parseFrontmatter('no frontmatter'), null)
   assert.equal(parseFrontmatter('---\n: [\n---\nx').error, 'invalid-yaml')
+  // Opens with `---` but never closes it: distinct from truly-absent frontmatter so
+  // the author knows to close the delimiter, not add one.
+  assert.equal(parseFrontmatter('---\ntype: concept\ntitle: X\n\n# body, no closing ---').error, 'unterminated-frontmatter')
+  assert.equal(parseFrontmatter('# just a heading\n\nbody'), null, 'no leading --- stays truly-missing')
 })
 
 test('listWikiPages + validatePage', (t) => {
