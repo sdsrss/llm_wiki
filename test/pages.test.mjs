@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { parseFrontmatter } from '../src/frontmatter.mjs'
-import { listWikiPages, validatePage, isInvalidated } from '../src/pages.mjs'
+import { listWikiPages, validatePage, isInvalidated, asList } from '../src/pages.mjs'
 import { initKb } from '../src/init.mjs'
 
 function tmp(t) {
@@ -50,6 +50,26 @@ test('listWikiPages + validatePage', (t) => {
   const issues = validatePage(bad)
   assert.ok(issues.some(i => i.includes('title')))
   assert.ok(issues.some(i => i.includes('sources')), 'entity requires sources field')
+})
+
+test('asList coerces non-array frontmatter fields to [] so consumers never crash', () => {
+  // a bare scalar `tags: cache` parses as a string — must not reach .join()/for-of as-is
+  assert.deepEqual(asList(['a', 'b']), ['a', 'b'])
+  assert.deepEqual(asList('cache'), [])
+  assert.deepEqual(asList(undefined), [])
+  assert.deepEqual(asList(null), [])
+  assert.deepEqual(asList(42), [])
+})
+
+test('validatePage flags tags authored as a bare scalar instead of a YAML list', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/entities/scalar.md'),
+    '---\ntype: entity\ntitle: T\ndescription: d\ntags: cache\nsources: raw/a.md\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nbody')
+  const pg = listWikiPages(d).find(p => p.relPath === 'entities/scalar.md')
+  const issues = validatePage(pg)
+  assert.ok(issues.some(i => i.includes('tags must be a YAML list')), 'string tags flagged')
+  assert.ok(issues.some(i => i.includes('sources')), 'string sources flagged')
 })
 
 test('isInvalidated reads the optional status field', () => {

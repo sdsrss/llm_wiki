@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { loadKbConfig } from './templates.mjs'
-import { listWikiPages, validatePage, isInvalidated, PAGE_STATUSES, RELATION_CONFIDENCES } from './pages.mjs'
+import { listWikiPages, validatePage, isInvalidated, asList, PAGE_STATUSES, RELATION_CONFIDENCES } from './pages.mjs'
 import { extractWikilinks, buildIndex } from './indexer.mjs'
 import { loadManifest } from './manifest.mjs'
 
@@ -27,7 +27,7 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
       if (!ids.has(target)) mechanical.push({ rule: 'broken-wikilink', path: pg.relPath, detail: `-> ${target}` })
       else incoming.set(target, (incoming.get(target) ?? 0) + 1)
     }
-    for (const src of pg.data.sources ?? []) {
+    for (const src of asList(pg.data.sources)) {
       if (!fs.existsSync(path.join(kbRoot, String(src)))) mechanical.push({ rule: 'missing-raw-source', path: pg.relPath, detail: String(src) })
     }
     if (pg.data.status !== undefined && !PAGE_STATUSES.includes(pg.data.status)) {
@@ -90,8 +90,11 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
   }
   const byTag = new Map()
   for (const pg of pages) {
-    if (pg.error) continue
-    for (const tag of pg.data.tags ?? []) {
+    // Invalidated pages are retired knowledge: they must drop out of the semantic
+    // worklist just like stale-scan (below) and the orphan rule already do, so the
+    // agent is never asked to reconcile a "contradiction" against a dead page.
+    if (pg.error || isInvalidated(pg)) continue
+    for (const tag of asList(pg.data.tags)) {
       if (!byTag.has(tag)) byTag.set(tag, [])
       byTag.get(tag).push(pg.relPath)
     }
@@ -115,7 +118,7 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
     if (pg.error || isInvalidated(pg)) continue
     const updated = String(pg.data.updated ?? '')
     if (!updated) continue
-    for (const src of pg.data.sources ?? []) {
+    for (const src of asList(pg.data.sources)) {
       const conv = convertedAtByRaw.get(String(src))
       if (conv && conv > updated) semantic.push({ task: 'stale-scan', detail: `${pg.relPath}: ${src} reconverted ${conv}, page updated ${updated}` })
     }

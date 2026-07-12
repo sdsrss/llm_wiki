@@ -95,3 +95,22 @@ test('CLI rejects non-positive-integer numeric flags with a clear error', (t) =>
   assert.equal(top.status, 1)
   assert.match(top.stderr, /invalid --top/)
 })
+
+test('convert exits non-zero when every file fails but stays 0 on partial success', (t) => {
+  const d = tmp(t)
+  const src = tmp(t)
+  initKb(d)
+  // a corrupt PDF fails to convert; nothing else in the plan -> total failure
+  fs.writeFileSync(path.join(src, 'bad.pdf'), '%PDF-1.4 not actually a pdf')
+  run('scan', src, '--kb', d)
+  const allFail = run('convert', '--kb', d)
+  assert.equal(allFail.status, 1, 'total conversion failure must exit 1')
+  assert.match(allFail.stdout, /converted 0, failed 1/)
+
+  // add a good markdown file: now one converts, one fails -> partial success, exit 0
+  fs.writeFileSync(path.join(src, 'good.md'), '# Good\nreal content here')
+  run('scan', src, '--kb', d)
+  const partial = run('convert', '--kb', d)
+  assert.equal(partial.status, 0, 'partial success must stay exit 0')
+  assert.match(partial.stdout, /converted 1, failed 1/)
+})

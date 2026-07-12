@@ -50,6 +50,10 @@ program.command('convert')
     const r = await runConvertPlan(opts.kb)
     console.log(`converted ${r.converted.length}, failed ${r.failed.length}`)
     for (const f of r.failed) console.log(`  FAILED ${f.src}: ${f.warnings.join('; ')}`)
+    // Total failure (nothing converted, at least one error) is a hard error a
+    // pipeline must catch — exit 1. A partial success keeps exit 0 so a messy dir
+    // with a few unconvertible junk files doesn't break an otherwise-good run.
+    if (r.converted.length === 0 && r.failed.length > 0) process.exit(1)
   })
 
 program.command('index')

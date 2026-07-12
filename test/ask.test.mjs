@@ -33,6 +33,20 @@ test('retrieveOnly returns ranked pages without calling the LLM', async (t) => {
   assert.equal(r.pages[0].relPath, 'sources/karpathy-gist.md')
 })
 
+test('retrievePages survives a page whose tags are a bare scalar (no join crash)', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  // `tags: cache` (not `[cache]`) parses as a string — must not crash the whole KB's
+  // retrieval via (tags ?? []).join. One malformed page cannot DoS ask.
+  fs.writeFileSync(path.join(d, 'wiki/entities/scalar.md'),
+    `---\ntype: entity\ntitle: Scalar tags\ndescription: d\ntags: cache\nsources: raw/a.md\ncreated: 2026-07-11\nupdated: 2026-07-11\n---\n\nbody about caching`)
+  fs.writeFileSync(path.join(d, 'wiki/sources/ok.md'),
+    `---\ntype: source\ntitle: Ok\ndescription: d\ntags: [x]\nsources: [raw/a.md]\ncreated: 2026-07-11\nupdated: 2026-07-11\n---\n\nbody about caching`)
+  const hits = retrievePages(d, 'caching', 5)
+  assert.ok(hits.length >= 1, 'retrieval returns results instead of throwing')
+  assert.ok(hits.some(h => h.relPath === 'entities/scalar.md'), 'the malformed page is still indexed by its body')
+})
+
 // R21 (audit): title is a weighted field — a term in a title should outrank the same
 // term buried in another page's body once bm25TitleWeight > 1.
 test('retrievePages boosts title matches per bm25TitleWeight', (t) => {
@@ -159,6 +173,19 @@ test('askKb surfaces the error body on non-ok responses', async (t) => {
   llmEnv(t, d)
   const fetchImpl = async () => ({ ok: false, status: 429, text: async () => '{"error":{"message":"rate limited, retry later"}}' })
   await assert.rejects(() => askKb(d, '三层架构有哪些', { fetchImpl, retry: { retries: 0 } }), /429.*rate limited/s)
+})
+
+test('askKb names the endpoint when the network call itself throws', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  llmEnv(t, d)
+  // undici throws a bare "fetch failed" on DNS/refused/timeout; the wrapper must
+  // add the endpoint URL so a mistyped baseURL is diagnosable, not opaque.
+  const fetchImpl = async () => { throw new Error('fetch failed') }
+  await assert.rejects(
+    () => askKb(d, '三层架构有哪些', { fetchImpl, retry: { retries: 0 } }),
+    /could not reach the LLM endpoint .*\/chat\/completions.*fetch failed/s,
+  )
 })
 
 test('askKb rejects with a clear error on unexpected 200 response shapes', async (t) => {

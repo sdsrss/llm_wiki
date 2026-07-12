@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { loadKbConfig } from './templates.mjs'
-import { listWikiPages, isInvalidated } from './pages.mjs'
+import { listWikiPages, isInvalidated, asList } from './pages.mjs'
 import { buildBm25Index, searchBm25 } from './bm25.mjs'
 import { worstCaseTokens } from './scanner.mjs'
 import { loadLlmConfig, makeTransport } from './llm-config.mjs'
@@ -19,7 +19,7 @@ export function retrievePages(kbRoot, question, k = 6) {
   const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
   const idx = buildBm25Index(pages.map(p => ({
     id: p.relPath,
-    text: [Array(w).fill(p.data.title ?? '').join('\n'), p.data.description, (p.data.tags ?? []).join(' '), p.body].join('\n'),
+    text: [Array(w).fill(p.data.title ?? '').join('\n'), p.data.description, asList(p.data.tags).join(' '), p.body].join('\n'),
   })))
   return searchBm25(idx, question, k).map(h => ({ relPath: h.id, score: h.score }))
 }
@@ -84,11 +84,19 @@ export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieva
 }
 
 export async function chatCompletion(cfg, t, messages) {
-  const res = await fetchWithRetry(t.fetchImpl, `${cfg.baseURL.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
-    body: JSON.stringify({ model: cfg.model, messages }),
-  }, { dispatcher: t.dispatcher, ...(t.retry ?? {}) })
+  const url = `${cfg.baseURL.replace(/\/$/, '')}/chat/completions`
+  let res
+  try {
+    res = await fetchWithRetry(t.fetchImpl, url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
+      body: JSON.stringify({ model: cfg.model, messages }),
+    }, { dispatcher: t.dispatcher, ...(t.retry ?? {}) })
+  } catch (err) {
+    // Node's undici surfaces a bare "fetch failed" for DNS/refused/timeout — name
+    // the endpoint so a mistyped baseURL or offline host is diagnosable, not opaque.
+    throw new Error(`could not reach the LLM endpoint ${url} — check baseURL/network in ~/.llm-wiki/config.json (${err.message})`)
+  }
   if (!res.ok) {
     let body = ''
     try { body = (await res.text()).slice(0, 200) } catch { /* body unreadable; status alone */ }

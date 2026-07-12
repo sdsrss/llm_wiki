@@ -45,11 +45,19 @@ function capEmbedText(text) {
 }
 
 export async function embedTexts(cfg, t, texts) {
-  const res = await fetchWithRetry(t.fetchImpl, `${cfg.baseURL.replace(/\/$/, '')}/embeddings`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
-    body: JSON.stringify({ model: cfg.embeddingModel, input: texts }),
-  }, { dispatcher: t.dispatcher, ...(t.retry ?? {}) })
+  const url = `${cfg.baseURL.replace(/\/$/, '')}/embeddings`
+  let res
+  try {
+    res = await fetchWithRetry(t.fetchImpl, url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.apiKey}` },
+      body: JSON.stringify({ model: cfg.embeddingModel, input: texts }),
+    }, { dispatcher: t.dispatcher, ...(t.retry ?? {}) })
+  } catch (err) {
+    // Mirror chatCompletion: turn undici's opaque "fetch failed" into a diagnosable
+    // message naming the endpoint (mistyped baseURL / offline host / DNS failure).
+    throw new Error(`could not reach the embedding endpoint ${url} — check baseURL/network in ~/.llm-wiki/config.json (${err.message})`)
+  }
   if (!res.ok) {
     let body = ''
     try { body = (await res.text()).slice(0, 200) } catch { /* status alone */ }

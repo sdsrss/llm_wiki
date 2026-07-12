@@ -94,6 +94,14 @@ test('embedTexts surfaces API errors with status and body snippet', async () => 
   await assert.rejects(() => embedTexts(CFG, { fetchImpl }, ['a']), /Embedding API error: 402 — quota exceeded/)
 })
 
+test('embedTexts names the endpoint when the network call itself throws', async () => {
+  const fetchImpl = async () => { throw new Error('fetch failed') }
+  await assert.rejects(
+    () => embedTexts(CFG, { fetchImpl, retry: { retries: 0 } }, ['a']),
+    /could not reach the embedding endpoint .*\/embeddings.*fetch failed/s,
+  )
+})
+
 test('embedKb without embeddingModel fails with actionable message', async (t) => {
   const d = tmp(t)
   initKb(d)

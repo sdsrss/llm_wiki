@@ -172,6 +172,21 @@ test('contradiction-scan caps at small shared-tag groups', async (t) => {
   assert.ok(!cs.some(s => s.detail.includes('tag "mega"')), '6-page tag suppressed as navigation tag')
 })
 
+test('contradiction-scan skips invalidated pages', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'raw/a.md'), 'raw')
+  const mk = (name, extra = '') => fs.writeFileSync(path.join(d, `wiki/entities/${name}.md`),
+    `---\ntype: entity\ntitle: ${name}\ndescription: d\ntags: [shared]\nsources: [raw/a.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n${extra}---\n\nbody [[entities/${name}]]`)
+  mk('live')
+  mk('retired', 'status: invalidated\ninvalidated: 2026-07-10\n')
+  const r = await lintKb(d)
+  const cs = r.semantic.filter(s => s.task === 'contradiction-scan')
+  // Only one live page carries tag "shared" once the invalidated one drops out,
+  // so no 2+ cluster remains and the scan stays silent.
+  assert.ok(!cs.some(s => s.detail.includes('tag "shared"')), 'invalidated page must not form a contradiction cluster')
+})
+
 test('orphan rule exempts comparison pages but not entities', async (t) => {
   const d = tmp(t)
   initKb(d)

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
-import { listWikiPages } from './pages.mjs'
+import { listWikiPages, asList } from './pages.mjs'
 import { scanSource } from './scanner.mjs'
 import { loadManifest, diffManifest } from './manifest.mjs'
 
@@ -27,7 +27,7 @@ export async function statusKb(kbRoot, srcDir) {
   for (const pg of listWikiPages(kbRoot)) {
     if (pg.error) continue
     const id = pg.relPath.replace(/\.md$/, '')
-    for (const src of pg.data.sources ?? []) {
+    for (const src of asList(pg.data.sources)) {
       const raw = String(src)
       referenced.add(raw)
       if (!pagesByRaw.has(raw)) pagesByRaw.set(raw, [])

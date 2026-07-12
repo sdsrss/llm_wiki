@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { readJsonFile } from './json.mjs'
+import { asList } from './pages.mjs'
 
 export function normalize(vec) {
   let s = 0
@@ -13,7 +14,7 @@ export function normalize(vec) {
 
 // Same fields BM25 indexes (src/ask.mjs retrievePages) so both channels see one text.
 export function pageEmbedText(pg) {
-  return [pg.data.title ?? '', pg.data.description ?? '', (pg.data.tags ?? []).join(' '), pg.body].join('\n')
+  return [pg.data.title ?? '', pg.data.description ?? '', asList(pg.data.tags).join(' '), pg.body].join('\n')
 }
 
 export function vectorStorePath(kbRoot) {

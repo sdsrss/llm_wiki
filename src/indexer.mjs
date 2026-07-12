@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { loadKbConfig } from './templates.mjs'
-import { listWikiPages, isInvalidated, RELATION_CONFIDENCES } from './pages.mjs'
+import { listWikiPages, isInvalidated, asList, RELATION_CONFIDENCES } from './pages.mjs'
 
 const WIKILINK_RE = /\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g
 
@@ -96,7 +96,7 @@ export function buildIndex(kbRoot) {
     for (const target of extractWikilinks(pg.body)) {
       if (ids.has(target)) edges.push({ source: id, target, type: 'wikilink', confidence: 'inferred' })
     }
-    for (const src of pg.data.sources ?? []) edges.push({ source: id, target: String(src), type: 'source', confidence: 'extracted' })
+    for (const src of asList(pg.data.sources)) edges.push({ source: id, target: String(src), type: 'source', confidence: 'extracted' })
     if (pg.data.superseded_by && ids.has(String(pg.data.superseded_by))) {
       edges.push({ source: id, target: String(pg.data.superseded_by), type: 'superseded_by', confidence: 'extracted' })
     }

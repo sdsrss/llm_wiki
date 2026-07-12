@@ -21,6 +21,19 @@ test('extractWikilinks normalizes targets', () => {
   assert.deepEqual(links, ['entities/karpathy', 'concepts/llm-wiki'])
 })
 
+test('buildIndex ignores a bare-scalar sources field instead of edging each character', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  // `sources: raw/a.md` (string, not a list) must not synthesize a source edge per
+  // character (r, a, w, /, ...) and pollute the graph with junk raw nodes.
+  fs.writeFileSync(path.join(d, 'wiki/entities/scalar.md'),
+    '---\ntype: entity\ntitle: Scalar\ndescription: d\ntags: [t]\nsources: raw/a.md\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nbody [[entities/scalar]]')
+  buildIndex(d)
+  const graph = JSON.parse(fs.readFileSync(path.join(d, 'wiki/graph.json'), 'utf8'))
+  assert.equal(graph.nodes.length, 1, 'only the page node, no per-character junk nodes')
+  assert.ok(!graph.edges.some(e => e.type === 'source'), 'no source edge from a malformed scalar')
+})
+
 test('buildIndex writes index.md preserving pending, graph.json, llms.txt', (t) => {
   const d = tmp(t)
   initKb(d)
