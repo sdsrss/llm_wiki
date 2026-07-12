@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.9.1 (2026-07-12)
+
+Correctness and diagnostics for the 0.9.0 local-embedding path; no change to the
+vectors produced. Suite 271 → 272.
+
+**Fixed:**
+
+- **Long pages no longer truncate silently on local models.** A local model
+  (e.g. `local:Xenova/multilingual-e5-small`) has a ~512-token input window and its
+  pipeline silently truncates longer pages to a head-only vector. `embed` now warns per
+  page and reports a `truncated N` count in its summary, so the head-only truncation is
+  visible instead of silent. The vector produced is unchanged.
+- **A broken transitive dependency is no longer masked as "install
+  @huggingface/transformers".** The missing-dependency hint now fires only when
+  transformers.js itself is absent; when transformers.js is installed but one of its
+  (native) deps fails to load, the original error naming the real culprit passes through.
+- **Clearer `embed` error when no embedding model is configured** — it now names the
+  actual fix (set `embeddingModel`) for both remote and local, instead of telling a user
+  who already has chat credentials to add credentials.
+
 ## 0.9.0 (2026-07-12)
 
 **Added:**
