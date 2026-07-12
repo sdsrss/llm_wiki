@@ -9,7 +9,7 @@ import { buildIndex } from '../src/indexer.mjs'
 import { askKb, retrievePages, rrfFuse, fuseChannels, locatePages } from '../src/ask.mjs'
 import { saveVectorStore } from '../src/vector.mjs'
 import { loadLlmConfig, makeTransport } from '../src/llm-config.mjs'
-import { loadKbConfig, DEFAULT_CONFIG } from '../src/templates.mjs'
+import { loadKbConfig } from '../src/templates.mjs'
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
@@ -403,6 +403,13 @@ test('fuseChannels: empty bm25 with vector present fires the guard (trivially di
   assert.equal(r.guardApplied, true)
   assert.deepEqual(r.hits.map(h => h.relPath), ['x.md', 'y.md'])
   assert.deepEqual(r.hits[0].sources, ['vector'])
+})
+
+test('fuseChannels: guarded vector-only ranking is truncated to k', () => {
+  const vector = [{ relPath: 'x.md', score: 0.9 }, { relPath: 'y.md', score: 0.8 }, { relPath: 'z.md', score: 0.7 }]
+  const r = fuseChannels({ bm25: [{ relPath: 'a.md', score: 9 }], vector }, 2)
+  assert.equal(r.guardApplied, true)
+  assert.deepEqual(r.hits.map(h => h.relPath), ['x.md', 'y.md']) // sliced to k=2
 })
 
 test('fuseChannels: lexicalGuard=false keeps RRF even when disjoint', () => {
