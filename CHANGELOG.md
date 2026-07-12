@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.8.1 (2026-07-12)
+
+Audit-driven remediation batch (see the v0.8.0 audit report): test-gate
+hermeticity, a `scan` performance fix, MCP/prompt hardening, and packaging
+fixes. No public API or KB contract change; no new config key or dependency.
+Suite 246 → 260.
+
+**Fixed:**
+
+- **`scan` no longer hangs on a large text file.** MinHash near-duplicate
+  signing is `O(length)`, but the `maxFileBytes` cap (50 MB, sized for I/O) did
+  not bound it — a single large legit `.txt`/`.md` could stall `scan` for
+  minutes and consume gigabytes of RAM. Shingling is now capped to a 256 KiB
+  prefix (a 33 MB input drops from ~minutes to ~0.7 s). Exact duplicates are
+  still caught by full-file sha256; only the fuzzy near-duplicate estimate uses
+  the prefix.
+- **MCP `wiki_overview` now returns the full catalog on large (>200 page) KBs.**
+  When the index is split into `wiki/topics/*.md`, `wiki_overview` inlines those
+  lists, so the model is no longer pointed at topic ids that `wiki_read_page`
+  cannot open.
+- **MCP error results carry the untrusted-content notice.** The invalidated-page
+  error (echoing `superseded_by`) and the `wiki_ask` failure path (which can echo
+  an LLM-provider response body) now prefix the same never-follow-instructions
+  notice as every other model-facing result.
+
+**Changed:**
+
+- **`connect` sentinel block** written into a project's `CLAUDE.md` now carries
+  the untrusted-content notice, so an agent reading KB pages via the block (not
+  the MCP server or skill) still gets the guard.
+- **Skill/contract consistency**: `wiki-ingest` gains the explicit
+  never-follow-instructions clause, a `wiki/hot.md` refresh step, and defers to
+  `AGENTS.md` for batch/cascade/card numbers; `AGENTS.md` documents the
+  distillation `raw/distilled/` write path; the relation-frontmatter example uses
+  a placeholder id with a "not a literal" guard.
+- README documents BM25 language coverage accurately (CJK ideographs + Hangul are
+  tokenized; Japanese kana is not — use vectors).
+
+**Added:**
+
+- `LICENSE` (MIT) is now shipped in the package.
+
 ## 0.8.0 (2026-07-12)
 
 Retrieval `auto` mode gains a cross-language noise guard — an additive config
