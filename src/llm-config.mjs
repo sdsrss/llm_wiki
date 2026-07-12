@@ -65,6 +65,24 @@ export function loadLlmConfig(kbRoot) {
   return cfg
 }
 
+// The embedding path (embedKb, locatePages' vector branch) needs an embeddingModel
+// but not necessarily chat credentials: a LOCAL model runs with no baseURL/apiKey at
+// all, so a fully-offline KB (local embeddings, no chat provider) can still embed +
+// search. A REMOTE embeddingModel still needs the chat provider's baseURL/apiKey to
+// call the API, so it resolves only when loadLlmConfig does. loadLlmConfig's own
+// (chat-complete-or-null) contract is unchanged.
+export function loadEmbedConfig(kbRoot) {
+  const chat = loadLlmConfig(kbRoot)
+  if (chat?.embeddingModel) return chat
+  const dir = process.env.LLM_WIKI_CONFIG_DIR ?? path.join(os.homedir(), '.llm-wiki')
+  const globalFile = path.join(dir, 'config.json')
+  if (!fs.existsSync(globalFile)) return null
+  const fileCfg = readJsonFile(globalFile, { redactContents: true })
+  const em = fileCfg.embeddingModel
+    ?? Object.values(fileCfg.providers ?? {}).map(p => p?.embeddingModel).find(Boolean)
+  return (typeof em === 'string' && em.startsWith('local:')) ? { embeddingModel: em } : null
+}
+
 // Node's built-in fetch rejects the npm undici package's dispatcher
 // ("invalid onRequestStart method": handler interface mismatch between
 // undici 8.x and Node's bundled undici), so when a proxy is configured we
