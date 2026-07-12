@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.7.2 (2026-07-12)
+
+Three defects found by continued end-to-end dogfooding — two robustness/DoS
+guards plus one UX fix. No config schema change, no KB migration, no
+retrieval-default change. Suite 221 → 228.
+
+**Fixes:**
+
+- **Malformed numeric config can no longer crash retrieval or hang scan.**
+  `wiki.config.json` is shallow-merged as-is, so a numeric key could arrive as a
+  string/0/negative/NaN and reach a scalar consumer: `bm25TitleWeight: "high"`
+  hit `Array(NaN)` → `RangeError` on *every* `ask`/`search`/MCP query (a huge int
+  → per-page `Array(n).fill` OOM), and `batchSize: 0` made `scan`'s batch loop
+  (`i += batchSize`) spin forever. `loadKbConfig` now coerces every numeric key
+  back to a finite integer ≥ 1 (falling back to its default), and
+  `bm25TitleWeight` is additionally capped at its consumer. Legitimate overrides
+  are untouched.
+- **Derived stores are written atomically.** `buildIndex` wrote `graph.json` /
+  `index.md` / `llms.txt` / topic files with a direct `writeFileSync`, which
+  truncates the target before writing — a reader running concurrently (a
+  long-lived MCP `graph` tool, `ask`'s `llms.txt` fallback) could read a torn
+  `graph.json` and crash on `JSON.parse`. All derived stores now write via a
+  shared temp-and-rename `writeFileAtomic` (the pattern `saveManifest` /
+  `saveVectorStore` already used), so a concurrent reader only ever sees the whole
+  old or whole new file.
+- **A source that converts to an empty page is no longer silent.** A
+  scanned/image-only PDF, an empty DOCX, or a blank `.txt` extracts to no text;
+  `convert` still writes the (empty) raw page and counts it as converted, but now
+  prints `WARN <src>: converted to an empty page — no extractable text` so the
+  user isn't misled into thinking real content was ingested.
+
 ## 0.7.1 (2026-07-11)
 
 Four defects found by end-to-end dogfooding — one crash-class fix plus three
