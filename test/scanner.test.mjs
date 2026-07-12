@@ -48,6 +48,9 @@ test('scanSource: dedup, batching, plan file', async (t) => {
   assert.equal(r.batches.length, 2)
   assert.ok(r.estimate.inputTokens > r.estimate.contentTokens)
   assert.ok(fs.existsSync(path.join(kb, '.scan-plan.json')))
+  // convert reads .scan-plan.json in a separate process — it must be written via
+  // temp+rename (no leftover .tmp) so a concurrent read can't see a torn file.
+  assert.ok(!fs.existsSync(path.join(kb, '.scan-plan.json.tmp')), 'plan written atomically, no leftover temp')
 })
 
 // ISSUE-002: bad srcDir used to leak a raw ENOENT/ENOTDIR node error.

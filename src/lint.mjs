@@ -5,6 +5,7 @@ import { loadKbConfig } from './templates.mjs'
 import { listWikiPages, validatePage, isInvalidated, asList, PAGE_STATUSES, RELATION_CONFIDENCES } from './pages.mjs'
 import { extractWikilinks, buildIndex } from './indexer.mjs'
 import { loadManifest } from './manifest.mjs'
+import { writeFileAtomic } from './json.mjs'
 
 export async function lintKb(kbRoot, { fix = false } = {}) {
   const p = kbPaths(kbRoot)
@@ -126,6 +127,8 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
 
   if (fix) { buildIndex(kbRoot); autoFixed.push('index-rebuilt') }
   const report = { autoFixed, mechanical, semantic }
-  fs.writeFileSync(path.join(kbRoot, '.lint-report.json'), JSON.stringify(report, null, 2) + '\n')
+  // Atomic write for uniformity with the other JSON state files (temp+rename). The
+  // report has no in-process reader today, so this is preventive, not a live torn-read.
+  writeFileAtomic(path.join(kbRoot, '.lint-report.json'), JSON.stringify(report, null, 2) + '\n')
   return report
 }

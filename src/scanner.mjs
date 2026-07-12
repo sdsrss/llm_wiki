@@ -6,6 +6,7 @@ import { SUPPORTED_EXTS } from './convert.mjs'
 import { sha256File, minhashSignature, jaccardEstimate } from './hashing.mjs'
 import { loadManifest, diffManifest } from './manifest.mjs'
 import { listWikiPages, isInvalidated } from './pages.mjs'
+import { writeFileAtomic } from './json.mjs'
 
 const TEXT_EXTS = ['.md', '.markdown', '.txt', '.html', '.htm']
 const NEAR_DUP_THRESHOLD = 0.85
@@ -169,6 +170,9 @@ export async function scanSource(srcDir, kbRoot, { exclude = [], persist = true,
     batches,
     estimate,
   }
-  if (persist) fs.writeFileSync(kbPaths(kbRoot).scanPlan, JSON.stringify(report, null, 2) + '\n')
+  // Atomic write: `convert` reads .scan-plan.json (runConvertPlan) as a separate
+  // process, so a direct writeFileSync (truncate-then-write) could hand it a torn
+  // file. Same torn-read class as buildIndex's derived stores.
+  if (persist) writeFileAtomic(kbPaths(kbRoot).scanPlan, JSON.stringify(report, null, 2) + '\n')
   return report
 }
