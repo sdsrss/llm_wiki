@@ -121,13 +121,14 @@ function main() {
 
   const r = buildIndex(out)
 
-  // Sample `sample` pages spread evenly across the WHOLE corpus (proportional
-  // placement reaches the last page too; an integer stride would drop the tail).
+  // Sample `sample` pages spread evenly across the WHOLE corpus, endpoints INCLUSIVE:
+  // j=0 -> page 0, j=sample-1 -> page tier-1, so the last page is always covered (a
+  // j*tier/sample map tops out at tier-tier/sample and silently drops the tail).
   // Dedupe indices so sample > tier can't emit duplicate probes for one page.
   const idxs = []
   const seenIdx = new Set()
   for (let j = 0; j < sample; j++) {
-    const i = Math.min(tier - 1, Math.round((j * tier) / sample))
+    const i = sample === 1 ? 0 : Math.round((j * (tier - 1)) / (sample - 1))
     if (!seenIdx.has(i)) { seenIdx.add(i); idxs.push(i) }
   }
   const probeLines = []
