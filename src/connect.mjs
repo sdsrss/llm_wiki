@@ -15,6 +15,10 @@ function renderBlock(kbs) {
 }
 
 export function connectProject(projectDir, { kb, role = 'project', remove = false }) {
+  // Fail with a clear message instead of leaking a raw ENOENT for an internal file
+  // (.llm-wiki.json) when the user points connect at a missing/typo'd project path.
+  if (!fs.existsSync(projectDir)) throw new Error(`project directory not found: ${projectDir}`)
+  if (!fs.statSync(projectDir).isDirectory()) throw new Error(`not a directory: ${projectDir}`)
   const regFile = path.join(projectDir, '.llm-wiki.json')
   const regExists = fs.existsSync(regFile)
   const registry = regExists ? readJsonFile(regFile) : { kbs: [] }

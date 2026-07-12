@@ -87,3 +87,13 @@ test('remove of the last kb keeps an existing registry file (emptied, not delete
   const reg = JSON.parse(fs.readFileSync(path.join(proj, '.llm-wiki.json'), 'utf8'))
   assert.deepEqual(reg.kbs, [])
 })
+
+test('connect fails clearly on a missing/non-directory project path (no raw ENOENT)', (t) => {
+  const proj = tmp(t)
+  const missing = path.join(proj, 'does-not-exist')
+  assert.throws(() => connectProject(missing, { kb: './kb' }), /project directory not found/)
+  // a path that exists but is a file, not a directory
+  const file = path.join(proj, 'a-file')
+  fs.writeFileSync(file, 'x')
+  assert.throws(() => connectProject(file, { kb: './kb' }), /not a directory/)
+})
