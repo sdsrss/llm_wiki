@@ -1,7 +1,9 @@
 // Local/offline embedding via transformers.js. The heavy dependency
-// (@huggingface/transformers, ~253 MB) is an optionalDependency, imported ONLY here
-// and ONLY when a `local:` embeddingModel is used — the base install stays lean. The
-// pipeline factory is injectable so tests never touch the real dependency.
+// (@huggingface/transformers, ~253 MB installed) is an optional peer dependency,
+// imported ONLY here and ONLY when a `local:` embeddingModel is used — the base
+// install stays lean. (Separate from the ~120 MB first-run model download noted in
+// the README — that's the model weights, not this package.) The pipeline factory is
+// injectable so tests never touch the real dependency.
 
 const LOCAL_PREFIX = 'local:'
 

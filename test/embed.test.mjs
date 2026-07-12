@@ -107,7 +107,7 @@ test('embedTexts names the endpoint when the network call itself throws', async 
   )
 })
 
-test('embedTexts routes a local: model to embedLocal with the role, skips HTTP', async (t) => {
+test('embedTexts routes a local: model to embedLocal with the role, skips HTTP', async () => {
   const calls = []
   const pipelineFactory = () => async (texts) => { calls.push(texts); return texts.map(() => [1, 0]) }
   // fetchImpl throws so any accidental HTTP path fails loudly
@@ -122,7 +122,7 @@ test('embedKb without embeddingModel fails with actionable message', async (t) =
   const d = tmp(t)
   initKb(d)
   setCfg(t, d, { baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm' })
-  await assert.rejects(() => embedKb(d), /No embedding model configured.*embeddingModel/s)
+  await assert.rejects(() => embedKb(d), /No usable embedding config.*embeddingModel/s)
 })
 
 test('embedKb is incremental: reuses unchanged, prunes removed/invalidated, re-embeds on model change', async (t) => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { loadLlmConfig, loadEmbedConfig } from '../src/llm-config.mjs'
+import { loadEmbedConfig } from '../src/llm-config.mjs'
 
 // Hermeticity: LLM_WIKI_API_KEY is a bootstrap override (llm-config.mjs) that forces
 // a non-null config and overrides apiKey — a developer exporting it (the single-var
