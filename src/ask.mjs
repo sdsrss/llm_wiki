@@ -41,6 +41,26 @@ export function rrfFuse(lists, k) {
   return [...acc.values()].sort((a, b) => b.score - a.score).slice(0, k)
 }
 
+// auto-mode guard: when the lexical (BM25) and semantic (vector) channels return
+// disjoint top-k page sets, BM25 contributed nothing the vector channel corroborates
+// — on a cross-language query its incidental-token hits are noise that rank-based RRF
+// would blend in and push correct pages out of top-k. In that case drop BM25 and rank
+// vector-only. Parameter-free: the overlap test uses the same k the call retrieves.
+// vector.length > 0 is required so the guard never returns an empty list.
+export function fuseChannels({ bm25, vector }, k, { lexicalGuard = true } = {}) {
+  if (lexicalGuard && vector.length > 0) {
+    const bm25Ids = new Set(bm25.map(h => h.relPath))
+    const disjoint = !vector.some(h => bm25Ids.has(h.relPath))
+    if (disjoint) {
+      return { hits: vector.slice(0, k).map(h => ({ ...h, sources: ['vector'] })), guardApplied: true }
+    }
+  }
+  return {
+    hits: rrfFuse([{ source: 'bm25', hits: bm25 }, { source: 'vector', hits: vector }], k),
+    guardApplied: false,
+  }
+}
+
 // Three modes. 'auto' (default): BM25 always; vector channel only when opted
 // in (vectorEnabled) AND the sidecar exists AND an embeddingModel is
 // configured — fail-open, any vector error degrades to BM25 with a single

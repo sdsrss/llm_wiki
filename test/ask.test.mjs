@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { initKb } from '../src/init.mjs'
 import { buildIndex } from '../src/indexer.mjs'
-import { askKb, retrievePages, rrfFuse, locatePages } from '../src/ask.mjs'
+import { askKb, retrievePages, rrfFuse, fuseChannels, locatePages } from '../src/ask.mjs'
 import { saveVectorStore } from '../src/vector.mjs'
 import { loadLlmConfig, makeTransport } from '../src/llm-config.mjs'
 import { loadKbConfig, DEFAULT_CONFIG } from '../src/templates.mjs'
@@ -370,6 +370,47 @@ test('rrfFuse merges ranked lists, dedupes by relPath, labels sources', () => {
   assert.deepEqual(fused[0].sources, ['bm25', 'vector'])
   assert.deepEqual(fused.map(h => h.relPath), ['b.md', 'a.md', 'c.md'])
   assert.ok(fused[0].score > fused[1].score && fused[1].score > fused[2].score)
+})
+
+test('fuseChannels: disjoint channels fire the guard and return vector-only', () => {
+  const bm25 = [{ relPath: 'a.md', score: 9 }, { relPath: 'b.md', score: 8 }]
+  const vector = [{ relPath: 'x.md', score: 0.9 }, { relPath: 'y.md', score: 0.8 }]
+  const r = fuseChannels({ bm25, vector }, 6)
+  assert.equal(r.guardApplied, true)
+  assert.deepEqual(r.hits.map(h => h.relPath), ['x.md', 'y.md'])
+  assert.deepEqual(r.hits[0].sources, ['vector'])
+})
+
+test('fuseChannels: overlapping channels fuse via RRF, no guard', () => {
+  const bm25 = [{ relPath: 'a.md', score: 9 }, { relPath: 'b.md', score: 8 }]
+  const vector = [{ relPath: 'b.md', score: 0.9 }, { relPath: 'c.md', score: 0.8 }]
+  const r = fuseChannels({ bm25, vector }, 6)
+  assert.equal(r.guardApplied, false)
+  assert.equal(r.hits[0].relPath, 'b.md') // shared page -> top RRF mass
+  assert.deepEqual(r.hits[0].sources, ['bm25', 'vector'])
+})
+
+test('fuseChannels: empty vector never fires the guard (would return nothing)', () => {
+  const bm25 = [{ relPath: 'a.md', score: 9 }, { relPath: 'b.md', score: 8 }]
+  const r = fuseChannels({ bm25, vector: [] }, 6)
+  assert.equal(r.guardApplied, false)
+  assert.deepEqual(r.hits.map(h => h.relPath), ['a.md', 'b.md'])
+})
+
+test('fuseChannels: empty bm25 with vector present fires the guard (trivially disjoint)', () => {
+  const vector = [{ relPath: 'x.md', score: 0.9 }, { relPath: 'y.md', score: 0.8 }]
+  const r = fuseChannels({ bm25: [], vector }, 6)
+  assert.equal(r.guardApplied, true)
+  assert.deepEqual(r.hits.map(h => h.relPath), ['x.md', 'y.md'])
+  assert.deepEqual(r.hits[0].sources, ['vector'])
+})
+
+test('fuseChannels: lexicalGuard=false keeps RRF even when disjoint', () => {
+  const bm25 = [{ relPath: 'a.md', score: 9 }]
+  const vector = [{ relPath: 'x.md', score: 0.9 }]
+  const r = fuseChannels({ bm25, vector }, 6, { lexicalGuard: false })
+  assert.equal(r.guardApplied, false)
+  assert.equal(r.hits.length, 2) // both pages survive the fuse
 })
 
 test('locatePages stays pure BM25 when vectorEnabled is false or sidecar missing', async (t) => {
