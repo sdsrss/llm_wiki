@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.8.0 (2026-07-12)
+
+Retrieval `auto` mode gains a cross-language noise guard — an additive config
+key (`lexicalGuard`, default on) with an opt-out. No KB migration, no API
+change, no new dependency. Suite 234 → 246.
+
+**Changed:**
+
+- **`auto` retrieval ranks vector-only when the lexical and semantic channels
+  disagree completely.** When BM25's top-k and the vector top-k return a
+  *disjoint* set of pages, BM25 contributed nothing the semantic channel
+  corroborates — on a cross-language query (e.g. a Chinese question against an
+  English KB) its incidental-token matches are noise that rank-based RRF would
+  blend in, pushing correct pages out of top-k. `auto` now drops BM25 and ranks
+  by the vector channel alone in that case. Measured on a 500-page KB: pure
+  cross-language Recall@5 rose 0.538 → 0.769 (matching pure vector) while
+  same-language fact retrieval stayed at 1.000 — the guard never fired on a
+  fact probe, so lexical retrieval is untouched where it is doing the work. The
+  guard is `auto`-only; explicit `hybrid` mode keeps pure RRF fusion. Set
+  `"lexicalGuard": false` in `wiki.config.json` to restore the previous
+  always-fuse behavior.
+
+**Added:**
+
+- `lexicalGuard` config key (boolean, default `true`), emitted into new KBs'
+  `wiki.config.json` by `init`.
+
 ## 0.7.4 (2026-07-12)
 
 Two robustness fixes surfaced by an adversarial QA pass over the CLI. No config
