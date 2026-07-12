@@ -3,6 +3,7 @@ import { loadEmbedConfig, makeTransport } from './llm-config.mjs'
 import { sha256Text } from './hashing.mjs'
 import { normalize, pageEmbedText, loadVectorStore, saveVectorStore } from './vector.mjs'
 import { fetchWithRetry } from './retry.mjs'
+import { estimateTokens } from './scanner.mjs'
 import { embedLocal, isLocalModel, stripLocalPrefix } from './local-embed.mjs'
 
 const BATCH = 64
@@ -11,6 +12,15 @@ const BATCH = 64
 // whole-page retrieval is unaffected — the page file and its BM25 text are never
 // touched, only the vector's input is truncated so one huge page can't abort the run.
 const EMBED_TOKEN_CAP = 8000
+// Local (transformers.js) models don't reject over-limit input the way an API does —
+// the feature-extraction pipeline silently truncates at the model's own window, so a
+// page over it yields a head-only vector with NO error. e5-small and most Xenova
+// sentence-transformers are 512 tokens; we keep the 8000 cap on the text we send (it
+// bounds compute and stays well above the window so the pipeline still fills it) and
+// warn separately, via a realistic token estimate, whenever a page crosses this window
+// so the head-only truncation is visible instead of silent. A model with a different
+// window would extend this into a per-model lookup.
+const LOCAL_TOKEN_WINDOW = 512
 
 // Worst-case token count for the embedding API — deliberately NOT scanner's
 // estimateTokens (chars/4), which underestimates dense markdown/code where real
@@ -77,19 +87,31 @@ export async function embedTexts(cfg, t, texts, { role = 'passage' } = {}) {
 export async function embedKb(kbRoot, { fetchImpl, retry, pipelineFactory } = {}) {
   const cfg = loadEmbedConfig(kbRoot)
   if (!cfg?.embeddingModel) throw new Error('No embedding model configured. Set "embeddingModel" in ~/.llm-wiki/config.json — a remote one (e.g. "text-embedding-3-small") also needs the provider baseURL/apiKey; a local one (e.g. "local:Xenova/multilingual-e5-small") needs no credentials.')
+  const local = isLocalModel(cfg.embeddingModel)
   const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
   const prev = loadVectorStore(kbRoot)
   const reuse = (prev && prev.model === cfg.embeddingModel) ? prev.pages : {}
   const jobs = []
   const nextPages = {}
   let reused = 0
+  let truncatedCount = 0
   for (const pg of pages) {
     const raw = pageEmbedText(pg)
     const text = capEmbedText(raw)
-    const truncated = text !== raw
+    // API path: `truncated` means our worst-case cap actually cut the text (the API
+    // would otherwise reject it). Local path: the cap rarely fires (window ≪ 8000), so
+    // detect the model's OWN silent truncation with a realistic estimate against its
+    // window — that's what produces a head-only vector the user should know about.
+    const overWindow = local && estimateTokens(raw) > LOCAL_TOKEN_WINDOW
+    const truncated = overWindow || (!local && text !== raw)
     const hash = sha256Text(text)
     if (reuse[pg.relPath]?.hash === hash) { nextPages[pg.relPath] = reuse[pg.relPath]; reused++; continue }
-    if (truncated) process.stderr.write(`warning: ${pg.relPath} embed text truncated to ~${EMBED_TOKEN_CAP} worst-case tokens (page exceeds embedding model input limit)\n`)
+    if (truncated) {
+      truncatedCount++
+      process.stderr.write(overWindow
+        ? `warning: ${pg.relPath} exceeds the local embedding model's ~${LOCAL_TOKEN_WINDOW}-token window — its vector covers only the page head\n`
+        : `warning: ${pg.relPath} embed text truncated to ~${EMBED_TOKEN_CAP} worst-case tokens (page exceeds embedding model input limit)\n`)
+    }
     jobs.push({ relPath: pg.relPath, text, hash })
   }
   let dim = (prev && prev.model === cfg.embeddingModel) ? prev.dim : null
@@ -119,5 +141,5 @@ export async function embedKb(kbRoot, { fetchImpl, retry, pipelineFactory } = {}
   const pruned = prev ? Object.keys(prev.pages).filter(id => !(id in nextPages)).length : 0
   const store = { model: cfg.embeddingModel, dim: dim ?? 0, pages: nextPages }
   saveVectorStore(kbRoot, store)
-  return { embedded, reused, pruned, model: cfg.embeddingModel, dim: store.dim }
+  return { embedded, reused, pruned, truncated: truncatedCount, model: cfg.embeddingModel, dim: store.dim }
 }

@@ -77,7 +77,8 @@ program.command('embed')
   .option('--kb <dir>', 'knowledge base root', '.')
   .action(async (opts) => {
     const r = await embedKb(opts.kb)
-    console.log(`embedded ${r.embedded}, reused ${r.reused}, pruned ${r.pruned} (model ${r.model}, dim ${r.dim})`)
+    const trunc = r.truncated ? `, truncated ${r.truncated}` : ''
+    console.log(`embedded ${r.embedded}, reused ${r.reused}, pruned ${r.pruned}${trunc} (model ${r.model}, dim ${r.dim})`)
   })
 
 program.command('ask <question>')

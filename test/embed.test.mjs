@@ -328,3 +328,33 @@ test('embedKb runs a local model with NO chat creds and captures dim from the ve
   assert.equal(r2.embedded, 0)
   assert.equal(r2.reused, 1)
 })
+
+test('embedKb warns when a page exceeds the local model window (silent head-only vector)', async (t) => {
+  const kb = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
+  t.after(() => fs.rmSync(kb, { recursive: true, force: true }))
+  initKb(kb)
+  const fm = (title) => `---\ntype: source\ntitle: ${title}\ndescription: d\ntags: [a]\nsources: []\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n\n`
+  // short page: well under the ~512-token local window (estimateTokens ~= chars/4)
+  fs.writeFileSync(path.join(kb, 'wiki/sources/short.md'), fm('Short') + 'tiny body')
+  // long page: ~3200 chars -> ~800 estimated tokens, over the 512 window. The local
+  // pipeline (real e5) would silently truncate this to a head-only vector.
+  fs.writeFileSync(path.join(kb, 'wiki/sources/long.md'), fm('Long') + 'lorem ipsum dolor sit amet '.repeat(120))
+  const cfgDir = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-cfg-'))
+  t.after(() => fs.rmSync(cfgDir, { recursive: true, force: true }))
+  process.env.LLM_WIKI_CONFIG_DIR = cfgDir
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(cfgDir, 'config.json'), JSON.stringify({ embeddingModel: 'local:Xenova/multilingual-e5-small' }))
+
+  const stderr = []
+  const origWrite = process.stderr.write.bind(process.stderr)
+  process.stderr.write = (s) => { stderr.push(String(s)); return true }
+  t.after(() => { process.stderr.write = origWrite })
+
+  const pipelineFactory = () => async (texts) => texts.map(() => [1, 0])
+  const r = await embedKb(kb, { pipelineFactory })
+
+  assert.equal(r.embedded, 2, 'both pages still embedded (truncation is not a skip)')
+  assert.equal(r.truncated, 1, 'exactly the over-window page is counted truncated')
+  assert.ok(stderr.some(s => /sources\/long\.md exceeds the local embedding model's ~512-token window/.test(s)), `stderr: ${stderr.join('')}`)
+  assert.ok(!stderr.some(s => /sources\/short\.md/.test(s)), 'the short page is not warned')
+})
