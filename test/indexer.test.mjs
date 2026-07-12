@@ -34,6 +34,22 @@ test('buildIndex ignores a bare-scalar sources field instead of edging each char
   assert.ok(!graph.edges.some(e => e.type === 'source'), 'no source edge from a malformed scalar')
 })
 
+test('buildIndex reports pages skipped for invalid frontmatter instead of dropping them silently (QA73-001)', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/concepts/good.md'), page('concept', 'Good'))
+  // unterminated YAML list -> parseFrontmatter error -> excluded from every derived file.
+  // Previously this vanished with no signal; buildIndex must surface it so the CLI can warn.
+  fs.writeFileSync(path.join(d, 'wiki/concepts/bad.md'), '---\ntitle: Bad\n  bad: [unclosed\n---\n# body\n')
+  const r = buildIndex(d)
+  assert.equal(r.pageCount, 1, 'only the valid page is counted')
+  assert.equal(r.skipped.length, 1, 'the malformed page is reported, not silently dropped')
+  assert.match(r.skipped[0].relPath, /concepts\/bad\.md$/)
+  assert.ok(r.skipped[0].error, 'the skip carries the frontmatter error reason')
+  // and it is genuinely absent from the derived surfaces
+  assert.ok(!fs.readFileSync(path.join(d, 'llms.txt'), 'utf8').includes('concepts/bad'))
+})
+
 test('buildIndex writes index.md preserving pending, graph.json, llms.txt', (t) => {
   const d = tmp(t)
   initKb(d)

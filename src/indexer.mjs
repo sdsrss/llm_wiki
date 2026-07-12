@@ -26,7 +26,13 @@ const inline = (s) => String(s ?? '').replace(/[\r\n]+/g, ' ')
 export function buildIndex(kbRoot) {
   const p = kbPaths(kbRoot)
   const cfg = loadKbConfig(kbRoot)
-  const pages = listWikiPages(kbRoot).filter(pg => !pg.error)
+  const allPages = listWikiPages(kbRoot)
+  const pages = allPages.filter(pg => !pg.error)
+  // Pages with unparseable/missing frontmatter are excluded from every derived file. Return
+  // them so the CLI can warn instead of silently dropping a page — the README routes
+  // hand-editors to `index` (not `lint`), so a bad edit would otherwise vanish with no signal
+  // (QA73-001). lint still owns the detailed per-page report.
+  const skipped = allPages.filter(pg => pg.error).map(pg => ({ relPath: pg.relPath, error: pg.error }))
 
   // Preserve the pending section, bounded at the next `## ` heading — a greedy
   // match to EOF would swallow user-added sections into "pending" forever.
@@ -122,5 +128,5 @@ export function buildIndex(kbRoot) {
     ...pages.filter(pg => !isInvalidated(pg)).map(pg => `- [${inline(pg.data.title)}](wiki/${pg.relPath}): ${inline(pg.data.description)}`)].join('\n') + '\n'
   writeFileAtomic(p.llmsTxt, llms)
 
-  return { pageCount: pages.length, topicsSplit }
+  return { pageCount: pages.length, topicsSplit, skipped }
 }

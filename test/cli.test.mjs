@@ -62,6 +62,18 @@ test('index / lint / status / graph CLI commands wire through to their modules',
   assert.match(run('graph', 'path', 'sources/a', 'entities/thing', '--kb', d).stdout, /entities\/thing/)
 })
 
+test('index CLI warns on stderr when a page is skipped for invalid frontmatter (QA73-001)', (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  // hand-edited page with broken YAML — the documented post-edit step is `index`, not `lint`
+  fs.writeFileSync(path.join(d, 'wiki/concepts/bad.md'), '---\ntitle: Bad\n  bad: [unclosed\n---\n# body\n')
+  const r = run('index', '--kb', d)
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /indexed 2 pages/, 'stdout still reports the valid page count')
+  assert.match(r.stderr, /skipped 1 page.*invalid frontmatter/i, 'the silent drop is surfaced on stderr')
+  assert.match(r.stderr, /concepts\/bad\.md/, 'the offending page is named')
+})
+
 test('connect CLI writes the sentinel block into a project CLAUDE.md', (t) => {
   const proj = tmp(t)
   const r = run('connect', proj, '--kb', './kb')

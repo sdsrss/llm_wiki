@@ -65,6 +65,12 @@ program.command('index')
   .action((opts) => {
     const r = buildIndex(opts.kb)
     console.log(`indexed ${r.pageCount} pages${r.topicsSplit ? ' (split into topics/)' : ''}`)
+    // A page with unparseable frontmatter is excluded from index.md/graph.json/llms.txt. Surface
+    // it on stderr (stdout stays the clean count) so a hand-edit that broke the YAML doesn't
+    // silently vanish — the README points hand-editors here, not at `lint`.
+    if (r.skipped?.length) {
+      console.error(`warning: skipped ${r.skipped.length} page(s) with invalid frontmatter (run 'lint' for details): ${r.skipped.map(s => s.relPath).join(', ')}`)
+    }
   })
 
 program.command('embed')
