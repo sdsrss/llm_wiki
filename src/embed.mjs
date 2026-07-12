@@ -1,5 +1,5 @@
 import { listWikiPages, isInvalidated } from './pages.mjs'
-import { loadLlmConfig, makeTransport } from './llm-config.mjs'
+import { loadEmbedConfig, makeTransport } from './llm-config.mjs'
 import { sha256Text } from './hashing.mjs'
 import { normalize, pageEmbedText, loadVectorStore, saveVectorStore } from './vector.mjs'
 import { fetchWithRetry } from './retry.mjs'
@@ -74,10 +74,9 @@ export async function embedTexts(cfg, t, texts, { role = 'passage' } = {}) {
   return [...data.data].sort((a, b) => a.index - b.index).map(d => d.embedding)
 }
 
-export async function embedKb(kbRoot, { fetchImpl, retry } = {}) {
-  const cfg = loadLlmConfig(kbRoot)
-  if (!cfg) throw new Error('No LLM configured. Create ~/.llm-wiki/config.json (OpenAI-compatible).')
-  if (!cfg.embeddingModel) throw new Error('No embedding model configured. Add "embeddingModel" to your provider (or flat config) in ~/.llm-wiki/config.json, e.g. "text-embedding-3-small".')
+export async function embedKb(kbRoot, { fetchImpl, retry, pipelineFactory } = {}) {
+  const cfg = loadEmbedConfig(kbRoot)
+  if (!cfg?.embeddingModel) throw new Error('No embedding model configured. Add "embeddingModel" to ~/.llm-wiki/config.json, e.g. "text-embedding-3-small" or "local:Xenova/multilingual-e5-small".')
   const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
   const prev = loadVectorStore(kbRoot)
   const reuse = (prev && prev.model === cfg.embeddingModel) ? prev.pages : {}
@@ -96,7 +95,10 @@ export async function embedKb(kbRoot, { fetchImpl, retry } = {}) {
   let dim = (prev && prev.model === cfg.embeddingModel) ? prev.dim : null
   let embedded = 0
   if (jobs.length > 0) {
-    const t = fetchImpl ? { fetchImpl, dispatcher: undefined, retry } : { ...(await makeTransport()), retry }
+    const injected = fetchImpl || pipelineFactory
+    const t = injected
+      ? { fetchImpl, dispatcher: undefined, retry, pipelineFactory }
+      : { ...(await makeTransport()), retry }
     for (let i = 0; i < jobs.length; i += BATCH) {
       const batch = jobs.slice(i, i + BATCH)
       const vecs = await embedTexts(cfg, t, batch.map(j => j.text))

@@ -300,3 +300,31 @@ test('embedKb caps an oversized pure-CJK page the same way (cjk chars count 1 to
   assert.deepEqual(fs.readFileSync(cjkFile), before)
   assert.ok(stderr.some(s => /sources\/cjk\.md embed text truncated/.test(s)), `stderr: ${stderr.join('')}`)
 })
+
+test('embedKb runs a local model with NO chat creds and captures dim from the vectors', async (t) => {
+  const kb = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
+  t.after(() => fs.rmSync(kb, { recursive: true, force: true }))
+  initKb(kb)
+  fs.writeFileSync(path.join(kb, 'wiki/sources/a.md'),
+    `---\ntype: source\ntitle: Alpha\ndescription: d\ntags: [a]\nsources: []\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n\nalpha body`)
+  const cfgDir = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-cfg-'))
+  t.after(() => fs.rmSync(cfgDir, { recursive: true, force: true }))
+  process.env.LLM_WIKI_CONFIG_DIR = cfgDir
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  // ONLY a local embeddingModel — no baseURL/apiKey/model anywhere
+  fs.writeFileSync(path.join(cfgDir, 'config.json'), JSON.stringify({ embeddingModel: 'local:Xenova/multilingual-e5-small' }))
+
+  const pipelineFactory = () => async (texts) => texts.map(() => [3, 4]) // -> normalized [0.6, 0.8], dim 2
+  const r = await embedKb(kb, { pipelineFactory })
+  assert.equal(r.model, 'local:Xenova/multilingual-e5-small')
+  assert.equal(r.dim, 2)
+  assert.equal(r.embedded, 1)
+  const store = loadVectorStore(kb)
+  assert.equal(store.model, 'local:Xenova/multilingual-e5-small')
+  assert.ok(Math.abs(store.pages['sources/a.md'].vec[0] - 0.6) < 1e-6, 'vector normalized by the shared normalize()')
+
+  // incremental reuse: a second run with no page change re-embeds nothing
+  const r2 = await embedKb(kb, { pipelineFactory })
+  assert.equal(r2.embedded, 0)
+  assert.equal(r2.reused, 1)
+})
