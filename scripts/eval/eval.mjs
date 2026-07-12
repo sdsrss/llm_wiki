@@ -9,7 +9,7 @@ import path from 'node:path'
 import { retrievePages, rrfFuse, fuseChannels } from '../../src/ask.mjs'
 import { loadVectorStore, normalize, cosineTopK } from '../../src/vector.mjs'
 import { embedTexts } from '../../src/embed.mjs'
-import { loadLlmConfig, makeTransport } from '../../src/llm-config.mjs'
+import { loadEmbedConfig, makeTransport } from '../../src/llm-config.mjs'
 import { loadKbConfig } from '../../src/templates.mjs'
 import { listWikiPages, isInvalidated } from '../../src/pages.mjs'
 import { readJsonFile } from '../../src/json.mjs'
@@ -49,9 +49,11 @@ const needVec = arms.some(a => a !== 'bm25')
 let store = null, cfg = null, t = null
 if (needVec) {
   store = loadVectorStore(kb)
-  cfg = loadLlmConfig(kb)
+  // loadEmbedConfig (not loadLlmConfig): a local: embeddingModel resolves with no chat
+  // creds, so the local-embedded C9 corpus this tooling targets can actually be evaluated.
+  cfg = loadEmbedConfig(kb)
   if (!store) { console.error('vector/hybrid arms need wiki/.vectors.json — run `llm-wiki embed --kb ' + kb + '` first'); process.exit(1) }
-  if (!cfg?.embeddingModel) { console.error('vector/hybrid arms need embeddingModel in ~/.llm-wiki/config.json'); process.exit(1) }
+  if (!cfg?.embeddingModel) { console.error('vector/hybrid arms need an embeddingModel in ~/.llm-wiki/config.json (a local: model needs no chat creds)'); process.exit(1) }
   t = await makeTransport()
 }
 
