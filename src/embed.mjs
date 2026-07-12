@@ -3,6 +3,7 @@ import { loadLlmConfig, makeTransport } from './llm-config.mjs'
 import { sha256Text } from './hashing.mjs'
 import { normalize, pageEmbedText, loadVectorStore, saveVectorStore } from './vector.mjs'
 import { fetchWithRetry } from './retry.mjs'
+import { embedLocal, isLocalModel, stripLocalPrefix } from './local-embed.mjs'
 
 const BATCH = 64
 // Safety margin under the 8192-token input limit of common embedding models
@@ -44,7 +45,10 @@ function capEmbedText(text) {
   return text.slice(0, lo)
 }
 
-export async function embedTexts(cfg, t, texts) {
+export async function embedTexts(cfg, t, texts, { role = 'passage' } = {}) {
+  if (isLocalModel(cfg.embeddingModel)) {
+    return embedLocal(stripLocalPrefix(cfg.embeddingModel), texts, { role, pipelineFactory: t?.pipelineFactory })
+  }
   const url = `${cfg.baseURL.replace(/\/$/, '')}/embeddings`
   let res
   try {

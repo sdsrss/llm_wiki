@@ -107,6 +107,17 @@ test('embedTexts names the endpoint when the network call itself throws', async 
   )
 })
 
+test('embedTexts routes a local: model to embedLocal with the role, skips HTTP', async (t) => {
+  const calls = []
+  const pipelineFactory = () => async (texts) => { calls.push(texts); return texts.map(() => [1, 0]) }
+  // fetchImpl throws so any accidental HTTP path fails loudly
+  const fetchImpl = async () => { throw new Error('HTTP path must not run for a local model') }
+  const cfg = { embeddingModel: 'local:Xenova/multilingual-e5-small' }
+  const out = await embedTexts(cfg, { fetchImpl, pipelineFactory }, ['doc one'], { role: 'passage' })
+  assert.deepEqual(out, [[1, 0]])
+  assert.deepEqual(calls[0], ['passage: doc one'], 'role prefix applied via embedLocal')
+})
+
 test('embedKb without embeddingModel fails with actionable message', async (t) => {
   const d = tmp(t)
   initKb(d)
