@@ -19,6 +19,19 @@ function titleFrom(markdown, fallback) {
   return m ? m[1].trim() : fallback
 }
 
+// A source can convert successfully yet yield no text — a scanned/image-only PDF, an
+// empty DOCX, a blank .txt. That is still a converted page (markdown '' is not null, so
+// the deliberate empty-file handling downstream is untouched), but writing a blank raw
+// page while reporting "converted" silently misleads the user. Attach a warning the CLI
+// can surface. `# heading`-prefixed HTML output never trims to empty, so this fires only
+// on genuinely contentless extractions.
+function result(markdown, title, warnings) {
+  if (markdown !== null && markdown.trim() === '') {
+    warnings.push('converted to an empty page — no extractable text (scanned/image-only PDF or empty document?)')
+  }
+  return { markdown, title, warnings }
+}
+
 export async function convertFile(srcPath) {
   const ext = path.extname(srcPath).toLowerCase()
   const base = path.basename(srcPath)
@@ -26,11 +39,11 @@ export async function convertFile(srcPath) {
   try {
     if (ext === '.md' || ext === '.markdown') {
       const md = fs.readFileSync(srcPath, 'utf8')
-      return { markdown: md, title: titleFrom(md, base), warnings }
+      return result(md, titleFrom(md, base), warnings)
     }
     if (ext === '.txt') {
       const md = fs.readFileSync(srcPath, 'utf8')
-      return { markdown: md, title: titleFrom(md, base), warnings }
+      return result(md, titleFrom(md, base), warnings)
     }
     if (ext === '.html' || ext === '.htm') {
       const { JSDOM } = await import('jsdom')
@@ -45,17 +58,17 @@ export async function convertFile(srcPath) {
       }
       const td = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' })
       const md = td.turndown(article.content)
-      return { markdown: `# ${article.title || base}\n\n${md}`, title: article.title || base, warnings }
+      return result(`# ${article.title || base}\n\n${md}`, article.title || base, warnings)
     }
     if (ext === '.pdf') {
       const { PDFParse } = await import('pdf-parse')
       const { text } = await new PDFParse({ data: fs.readFileSync(srcPath) }).getText()
-      return { markdown: text, title: titleFrom(text, base), warnings }
+      return result(text, titleFrom(text, base), warnings)
     }
     if (ext === '.docx') {
       const mammoth = await import('mammoth')
       const { value } = await mammoth.extractRawText({ path: srcPath })
-      return { markdown: value, title: titleFrom(value, base), warnings }
+      return result(value, titleFrom(value, base), warnings)
     }
     warnings.push(`unsupported extension: ${ext}`)
     return { markdown: null, title: base, warnings }

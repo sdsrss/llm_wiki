@@ -24,6 +24,18 @@ test('slugify keeps CJK, normalizes separators', () => {
   assert.equal(slugify('LLM Wiki 构建手册: v1/final'), 'llm-wiki-构建手册-v1-final')
 })
 
+// A scanned/image-only PDF or an empty DOCX extracts to '' — still a "converted"
+// page (markdown '' != null, so the deliberate empty-file handling is preserved),
+// but writing a blank raw page silently while reporting success misleads the user.
+// convertFile must attach a warning so the CLI can surface it.
+test('convertFile warns when a source converts to an empty page', async (t) => {
+  const d = tmp(t)
+  fs.writeFileSync(path.join(d, 'blank.txt'), '   \n\n  ')
+  const r = await convertFile(path.join(d, 'blank.txt'))
+  assert.equal(r.markdown.trim(), '', 'empty content is still returned (not null)')
+  assert.ok(r.warnings.some(w => /empty page|no extractable text/i.test(w)), 'an empty-page warning is attached')
+})
+
 test('md passes through, txt wraps, title from first heading', async (t) => {
   const d = tmp(t)
   fs.writeFileSync(path.join(d, 'a.md'), '# 标题甲\n\ncontent')

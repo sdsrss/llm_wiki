@@ -69,7 +69,7 @@ export async function runConvertPlan(kbRoot) {
       convertedAt: new Date().toISOString().slice(0, 10),
       ...(originalRel ? { original: originalRel } : {}),
     }
-    converted.push({ src: rel, raw: rawRel })
+    converted.push({ src: rel, raw: rawRel, ...(warnings.length ? { warnings } : {}) })
   }
   saveManifest(kbRoot, manifest)
   return { converted, failed }

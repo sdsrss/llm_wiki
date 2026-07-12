@@ -32,6 +32,21 @@ test('runConvertPlan writes raw files and manifest; second scan shows unchanged'
   assert.equal(r2.batches.length, 0)
 })
 
+test('runConvertPlan surfaces an empty-page warning on the converted entry', async (t) => {
+  const src = tmp(t), kb = tmp(t)
+  initKb(kb)
+  // Whitespace-only source: non-zero bytes (so scan plans it) but no text — mirrors a
+  // scanned/image-only PDF or empty DOCX. It still converts (empty raw page written),
+  // but the converted record must carry a warning so the CLI can tell the user.
+  fs.writeFileSync(path.join(src, 'scanned.txt'), '   \n\n\t  \n')
+  await scanSource(src, kb, {})
+  const r = await runConvertPlan(kb)
+  assert.equal(r.converted.length, 1)
+  assert.equal(r.failed.length, 0, 'an empty page is a warning, not a failure')
+  assert.ok(r.converted[0].warnings?.some(w => /empty page|no extractable text/i.test(w)),
+    'the converted entry carries the empty-page warning')
+})
+
 // ISSUE-005: emoji/symbol-only source names must produce visible, non-hidden
 // raw files (not `raw/.md`) so `status`/incremental tracking can see them.
 test('runConvertPlan: symbol-only source names yield visible non-dotfile raw files', async (t) => {
