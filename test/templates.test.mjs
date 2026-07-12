@@ -15,6 +15,7 @@ test('DEFAULT_CONFIG has all spec keys with defaults', () => {
   assert.equal(DEFAULT_CONFIG.language, 'auto')
   assert.equal(DEFAULT_CONFIG.linkStyle, 'wikilink')
   assert.equal(DEFAULT_CONFIG.maxFileBytes, 52428800)
+  assert.equal(DEFAULT_CONFIG.bm25TitleWeight, 3)
   assert.ok(!('rawDir' in DEFAULT_CONFIG) && !('schemaFile' in DEFAULT_CONFIG),
     'unwired pseudo-config keys removed — raw/ and AGENTS.md are fixed layout')
 })

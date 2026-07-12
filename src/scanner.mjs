@@ -49,6 +49,17 @@ export function estimateTokens(text) {
   return Math.round(cjk / 1.6 + (text.length - cjk) / 4)
 }
 
+// Pessimistic token estimate for budgeting model input (ask). Dense markdown/code
+// runs ~2-3.5 chars/BPE-token, so estimateTokens' chars/4 under-counts and can
+// overflow a small context window; assume ~2 chars/token for non-CJK and ~1
+// token/char for CJK. (Mirror of embed.mjs's local worstCaseEmbedTokens, which
+// stays local by its own note; this is the shared budgeting copy.)
+export function worstCaseTokens(text) {
+  let cjk = 0
+  for (const ch of text) if (/[　-鿿豈-﫿]/.test(ch)) cjk++
+  return Math.round(cjk + (text.length - cjk) / 2)
+}
+
 // Symlinked directories are not followed (loop safety) but are recorded in
 // `skippedDirs` so they surface in the scan report instead of vanishing silently.
 // Symlinked files are followed ONLY when their target resolves inside the source

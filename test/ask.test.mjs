@@ -33,6 +33,43 @@ test('retrieveOnly returns ranked pages without calling the LLM', async (t) => {
   assert.equal(r.pages[0].relPath, 'sources/karpathy-gist.md')
 })
 
+// R21 (audit): title is a weighted field — a term in a title should outrank the same
+// term buried in another page's body once bm25TitleWeight > 1.
+test('retrievePages boosts title matches per bm25TitleWeight', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/entities/z.md'),
+    `---\ntype: entity\ntitle: Zephyr\ndescription: d\ntags: [x]\nsources: [raw/a.md]\ncreated: 2026-07-11\nupdated: 2026-07-11\n---\n\nunrelated body content here`)
+  fs.writeFileSync(path.join(d, 'wiki/sources/b.md'),
+    `---\ntype: source\ntitle: Other\ndescription: d\ntags: [x]\nsources: [raw/a.md]\ncreated: 2026-07-11\nupdated: 2026-07-11\n---\n\na body that mentions zephyr once`)
+  const scoreOf = (res, id) => res.find(h => h.relPath === id)?.score ?? 0
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ bm25TitleWeight: 1 }))
+  const flat = retrievePages(d, 'zephyr', 5)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ bm25TitleWeight: 5 }))
+  const weighted = retrievePages(d, 'zephyr', 5)
+  assert.ok(scoreOf(weighted, 'entities/z.md') > scoreOf(flat, 'entities/z.md'),
+    'a higher title weight raises the title-only match score')
+})
+
+// R18 (audit): the budget uses a pessimistic estimate, so dense pages are trimmed
+// under a small askTokenBudget rather than overflowing the model context.
+test('askKb budget uses the pessimistic estimate and trims the second dense page', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const body = 'lorem ipsum dolor sit amet '.repeat(22) // ~600 ascii chars -> worstCase ~300 tokens
+  fs.writeFileSync(path.join(d, 'wiki/sources/a.md'),
+    `---\ntype: source\ntitle: Quorum\ndescription: d\ntags: [x]\ncreated: 2026-07-11\nupdated: 2026-07-11\n---\n\nquorum ${body}`)
+  fs.writeFileSync(path.join(d, 'wiki/sources/b.md'),
+    `---\ntype: source\ntitle: Other\ndescription: quorum\ntags: [x]\ncreated: 2026-07-11\nupdated: 2026-07-11\n---\n\nquorum ${body}`)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ askTokenBudget: 500 }))
+  buildIndex(d)
+  llmEnv(t, d)
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) })
+  const r = await askKb(d, 'quorum', { fetchImpl })
+  assert.equal(r.pages.length, 1, 'only the top page fits the 500-token budget under the pessimistic estimate')
+  assert.equal(r.trimmed.length, 1, 'the second dense page is trimmed, not truncated')
+})
+
 test('askKb sends full pages to the LLM and returns answer', async (t) => {
   const d = tmp(t)
   seedKb(d)

@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { initKb } from '../src/init.mjs'
-import { scanSource, estimateTokens } from '../src/scanner.mjs'
+import { scanSource, estimateTokens, worstCaseTokens } from '../src/scanner.mjs'
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
@@ -16,6 +16,14 @@ function tmp(t) {
 test('estimateTokens: CJK counted ~1.6 chars/token, ascii ~4', () => {
   assert.ok(Math.abs(estimateTokens('测试中文内容啊'.repeat(10)) - 70 / 1.6) < 5)
   assert.ok(Math.abs(estimateTokens('a'.repeat(400)) - 100) < 5)
+})
+
+// R18 (audit): pessimistic budget estimate — ~2 chars/token ascii, ~1/char CJK —
+// so dense pages don't overflow a small context window.
+test('worstCaseTokens is pessimistic vs estimateTokens', () => {
+  assert.equal(worstCaseTokens('a'.repeat(400)), 200) // 400 / 2, vs estimateTokens' ~100
+  assert.equal(worstCaseTokens('中'.repeat(100)), 100) // 1 token / CJK char
+  assert.ok(worstCaseTokens('x'.repeat(1000)) > estimateTokens('x'.repeat(1000)), 'always >= the nominal estimate')
 })
 
 test('scanSource: dedup, batching, plan file', async (t) => {

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.7.0 (2026-07-11)
+
+Two retrieval-default changes (hence a minor bump). Both are opt-out via
+`wiki.config.json`; no KB migration, no re-index needed. Suite 210 → 213.
+
+**What changes for you:**
+
+- **BM25 now weights page titles.** A query term in a page's title outranks the
+  same term buried in another page's body. Measured on the dogfood KB (24 probes):
+  Recall@5 0.688 → 0.729, MRR 0.646 → 0.675 (the lift is entirely on fact-style
+  queries; cross-language and multi-hop are unchanged). **Opt out** by setting
+  `"bm25TitleWeight": 1` in `wiki.config.json` (default `3`) — `1` restores the
+  previous flat single-field indexing.
+- **`ask` now budgets tokens pessimistically.** Page size against `askTokenBudget`
+  is now estimated at a worst-case ~2 chars/token (was ~4), so dense
+  markdown/code pages no longer silently overflow a small model context window.
+  The visible effect: on a tight budget, `ask` may load fewer whole pages before
+  trimming the lowest-ranked ones. **To include more pages**, raise
+  `"askTokenBudget"` in `wiki.config.json` (default `32000`) — pages are still
+  always sent whole, never truncated.
+
 ## 0.6.7 (2026-07-11)
 
 Contract/skill clarifications, an env-var convenience, and an explicit platform
