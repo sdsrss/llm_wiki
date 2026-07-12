@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.9.2 (2026-07-12)
+
+Robustness and UX fixes from an end-to-end usage audit; no change to core retrieval or
+convert behavior. Suite 271 → 279.
+
+**Fixed:**
+
+- **Concurrent writes to a derived file no longer crash.** `writeFileAtomic` used a fixed
+  temp name, so two writers to the same file (concurrent `index`, or the MCP server and a
+  CLI command touching the same derived file) collided — the second renamed a temp the
+  first had already consumed and died with ENOENT. Each write now uses a unique temp; the
+  rename onto the target stays atomic, so readers still never see a torn write.
+- **`graph` accepts `--kb` on the parent command** (`graph --kb ./kb hubs`), like every
+  other command — it previously errored "unknown option --kb" unless `--kb` came after the
+  subcommand.
+- **`ask` rejects an empty/whitespace question** instead of running a no-op search.
+- **`ask --retrieve-only` tells an empty wiki apart from a no-match query** — it no longer
+  tells a user with a populated KB to go build pages they already have.
+- **`connect` reports a clear error for a missing/non-directory project path** instead of
+  leaking a raw ENOENT for an internal file.
+- **`scan` no longer reports a phantom "+1 to convert" for an exact-duplicate file** — the
+  incremental count now agrees with the compile plan (duplicates are reported separately).
+- **Clearer frontmatter error**: a page that opens `---` but never closes it is reported as
+  `unterminated-frontmatter`, not `missing-frontmatter`.
+- **Clearer `embed` error** when no embedding model is configured (names the field to set,
+  for both remote and local).
+
+**Added (lint):**
+
+- `type-dir-mismatch` — flags a page whose `type` disagrees with its directory (e.g.
+  `type: source` in `concepts/`), which the indexer would otherwise silently miscategorize.
+- `self-supersede` — flags a page whose `superseded_by` points at itself.
+
+**Changed (internal):**
+
+- `loadEmbedConfig` reads the global config once per call and resolves a provider-level
+  embedding model in priority order, consistent with chat provider selection.
+- Local embedding no longer builds a network transport (no undici import / proxy agent),
+  since it makes no network calls.
+
 ## 0.9.1 (2026-07-12)
 
 Correctness and diagnostics for the 0.9.0 local-embedding path; no change to the
