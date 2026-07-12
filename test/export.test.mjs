@@ -37,6 +37,22 @@ test('loadGraph synthesizes raw nodes for source-edge targets', (t) => {
   }
 })
 
+test('loadGraph names the file and hints rebuild on a corrupt graph.json', (t) => {
+  const d = seedKb(t)
+  fs.writeFileSync(path.join(d, 'wiki/graph.json'), '{ "nodes": [ broken')
+  // Every other JSON reader routes through readJsonFile (names the file); loadGraph
+  // must not be the lone one throwing a bare "Unexpected token" SyntaxError.
+  assert.throws(() => loadGraph(d), /graph\.json.*invalid JSON.*rerun `llm-wiki index`/s)
+})
+
+test('loadGraph rejects a valid-JSON but wrong-shape graph.json instead of a bare TypeError', (t) => {
+  const d = seedKb(t)
+  fs.writeFileSync(path.join(d, 'wiki/graph.json'), '{}')
+  // `{}` parses fine but has no nodes/edges arrays — `graph.nodes.map` would throw
+  // "Cannot read properties of undefined". Guard the shape like loadManifest does.
+  assert.throws(() => loadGraph(d), /graph\.json.*unexpected shape|nodes\/edges/s)
+})
+
 test('toGraphML escapes XML and carries node/edge attributes', (t) => {
   const d = seedKb(t)
   const xml = toGraphML(loadGraph(d))

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { listWikiPages } from './pages.mjs'
+import { readJsonFile } from './json.mjs'
 
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
@@ -16,7 +17,18 @@ const cyEscape = (s) => String(s).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').r
 export function loadGraph(kbRoot) {
   const p = kbPaths(kbRoot)
   if (!fs.existsSync(p.graphJson)) throw new Error('wiki/graph.json not found — run `llm-wiki index` first.')
-  const graph = JSON.parse(fs.readFileSync(p.graphJson, 'utf8'))
+  // graph.json is a derived store — route it through readJsonFile (names the file)
+  // rather than a bare JSON.parse whose SyntaxError leaks no path, and guard the shape
+  // so a hand-corrupted-but-valid `{}` doesn't crash on `graph.nodes.map` (undefined).
+  let graph
+  try {
+    graph = readJsonFile(p.graphJson)
+  } catch (err) {
+    throw new Error(`${err.message} — rerun \`llm-wiki index\` to rebuild the graph`)
+  }
+  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+    throw new Error('wiki/graph.json has an unexpected shape (needs nodes/edges arrays) — rerun `llm-wiki index`')
+  }
   const ids = new Set(graph.nodes.map(n => n.id))
   for (const e of graph.edges) {
     for (const end of [e.source, e.target]) {
