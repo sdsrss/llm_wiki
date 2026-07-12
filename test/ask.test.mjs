@@ -484,6 +484,31 @@ test('locatePages fuses vector hits: cross-language query BM25 misses, vector fi
   assert.ok(r.hits[0].sources.includes('vector'))
 })
 
+test('locatePages embeds the query with a local model and role:query; offline retrieve works', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(d, 'wiki/sources/target.md'),
+    `---\ntype: source\ntitle: Target\ndescription: d\ntags: [target]\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n\ntarget body`)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true }))
+  saveVectorStore(d, { model: 'local:Xenova/multilingual-e5-small', dim: 2, pages: {
+    'sources/target.md': { hash: 'h', vec: [1, 0] },
+    'sources/other.md': { hash: 'h', vec: [0, 1] },
+  } })
+  // config: ONLY a local embeddingModel, no chat creds
+  const cfgDir = path.join(d, 'cfgdir')
+  fs.mkdirSync(cfgDir)
+  process.env.LLM_WIKI_CONFIG_DIR = cfgDir
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(cfgDir, 'config.json'), JSON.stringify({ embeddingModel: 'local:Xenova/multilingual-e5-small' }))
+
+  const seen = []
+  const pipelineFactory = () => async (texts) => { seen.push(texts); return texts.map(() => [1, 0]) } // points at target
+  const r = await locatePages(d, 'какой-то запрос', { pipelineFactory })
+  assert.ok(r.usedVector, 'vector path ran offline with a local model')
+  assert.ok(r.hits.some(h => h.relPath === 'sources/target.md'))
+  assert.deepEqual(seen[0], ['query: какой-то запрос'], 'query embedded with role:query prefix')
+})
+
 test('locatePages degrades to BM25 with a warning when the embedding call fails', async (t) => {
   const d = tmp(t)
   seedKb(d)

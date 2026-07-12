@@ -5,7 +5,7 @@ import { loadKbConfig } from './templates.mjs'
 import { listWikiPages, isInvalidated, asList, PAGE_DIRS } from './pages.mjs'
 import { buildBm25Index, searchBm25 } from './bm25.mjs'
 import { worstCaseTokens } from './scanner.mjs'
-import { loadLlmConfig, makeTransport } from './llm-config.mjs'
+import { loadLlmConfig, loadEmbedConfig, makeTransport } from './llm-config.mjs'
 import { loadVectorStore, normalize, cosineTopK } from './vector.mjs'
 import { embedTexts } from './embed.mjs'
 import { fetchWithRetry } from './retry.mjs'
@@ -124,7 +124,7 @@ export function fuseChannels({ bm25, vector }, k, { lexicalGuard = true } = {}) 
 // 'bm25': lexical only, returns before any vector access.
 // 'hybrid': explicit BM25+vector fusion — every missing prerequisite (and any
 // vector error) throws instead of degrading, and vectorEnabled is ignored.
-export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieval = 'auto', retry } = {}) {
+export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieval = 'auto', retry, pipelineFactory } = {}) {
   if (!['auto', 'bm25', 'hybrid'].includes(retrieval)) throw new Error(`unknown retrieval mode: ${retrieval}`)
   const bm25 = retrievePages(kbRoot, question, k)
   const asBm25 = () => ({ hits: bm25.map(h => ({ ...h, sources: ['bm25'] })), usedVector: false, guardApplied: false })
@@ -140,14 +140,17 @@ export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieva
   if (retrieval === 'auto' && !kbCfg.vectorEnabled) return asBm25()
   const store = loadVectorStore(kbRoot)
   if (!store) return unavailable('no wiki/.vectors.json — run `llm-wiki embed` first')
-  const cfg = loadLlmConfig(kbRoot)
+  const cfg = loadEmbedConfig(kbRoot)
   if (!cfg?.embeddingModel) return unavailable('no embeddingModel in ~/.llm-wiki/config.json')
   // A store built by a different embeddingModel lives in a foreign vector space:
   // fusing it produces silent garbage, so treat it as missing (not a failure).
   if (store.model !== cfg.embeddingModel) return unavailable(`vector store was built with "${store.model}" but config says "${cfg.embeddingModel}" — re-run \`llm-wiki embed\``)
   try {
-    const t = fetchImpl ? { fetchImpl, dispatcher: undefined, retry } : { ...(await makeTransport()), retry }
-    const [qv] = await embedTexts(cfg, t, [question])
+    const injected = fetchImpl || pipelineFactory
+    const t = injected
+      ? { fetchImpl, dispatcher: undefined, retry, pipelineFactory }
+      : { ...(await makeTransport()), retry }
+    const [qv] = await embedTexts(cfg, t, [question], { role: 'query' })
     const qn = normalize(qv)
     const vecHits = qn ? cosineTopK(qn, store, k).map(v => ({ relPath: v.id, score: v.score })) : []
     // The store is a snapshot from the last embed; pages invalidated, deleted, or
@@ -226,9 +229,9 @@ async function pickPagesFromListing(p, question, k, cfg, t, validIds) {
   return picked.map(id => ({ relPath: `${id}.md`, score: 0 }))
 }
 
-export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fetchImpl, retrieval = 'auto', retry } = {}) {
+export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fetchImpl, retrieval = 'auto', retry, pipelineFactory } = {}) {
   const p = kbPaths(kbRoot)
-  let { hits } = await locatePages(kbRoot, question, { k, fetchImpl, retrieval, retry })
+  let { hits } = await locatePages(kbRoot, question, { k, fetchImpl, retrieval, retry, pipelineFactory })
   if (retrieveOnly) return { pages: hits, answer: null }
   let validIds
   if (hits.length === 0) {
