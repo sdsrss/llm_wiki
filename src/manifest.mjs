@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import { kbPaths } from './paths.mjs'
-import { readJsonFile } from './json.mjs'
+import { readJsonFile, writeFileAtomic } from './json.mjs'
 
 export function loadManifest(kbRoot) {
   const p = kbPaths(kbRoot)
@@ -13,11 +13,9 @@ export function loadManifest(kbRoot) {
 
 export function saveManifest(kbRoot, manifest) {
   const p = kbPaths(kbRoot)
-  // Atomic write: manifest is non-derived state (hash->raw map). A crash mid-write
-  // must not leave a truncated/corrupt file. Write a temp sibling, then rename.
-  const tmp = `${p.manifest}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2) + '\n')
-  fs.renameSync(tmp, p.manifest)
+  // Atomic write (shared writeFileAtomic): manifest is non-derived state (hash->raw
+  // map) and a crash or concurrent reader must never see a truncated/corrupt file.
+  writeFileAtomic(p.manifest, JSON.stringify(manifest, null, 2) + '\n')
 }
 
 export function diffManifest(manifest, entries) {

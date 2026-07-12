@@ -52,6 +52,22 @@ test('buildIndex writes index.md preserving pending, graph.json, llms.txt', (t) 
   assert.match(fs.readFileSync(path.join(d, 'llms.txt'), 'utf8'), /wiki\/sources\/art\.md/)
 })
 
+test('buildIndex writes its derived stores atomically (no .tmp residue, parseable graph)', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  // graph.json is JSON.parse'd by loadGraph / the MCP graph tool at query time; a
+  // non-atomic writeFileSync truncates it first, so a concurrent reader would crash
+  // on a torn file. buildIndex must go through writeFileAtomic (temp + rename) for
+  // every derived store. Absence of the .tmp sibling is the signature of that path.
+  fs.writeFileSync(path.join(d, 'wiki/sources/art.md'), page('source', 'Article', 'links [[entities/kar]]'))
+  fs.writeFileSync(path.join(d, 'wiki/entities/kar.md'), page('entity', 'Karpathy'))
+  buildIndex(d)
+  for (const f of ['wiki/graph.json', 'wiki/index.md', 'llms.txt']) {
+    assert.ok(!fs.existsSync(path.join(d, `${f}.tmp`)), `${f} written via atomic rename, no leftover temp`)
+  }
+  assert.doesNotThrow(() => JSON.parse(fs.readFileSync(path.join(d, 'wiki/graph.json'), 'utf8')), 'graph.json is whole and parseable')
+})
+
 // R16 / audit LOW-1: a frontmatter description/title with newlines must not inject
 // extra lines, fake headings or spoofed wikilinks into index.md / llms.txt.
 test('buildIndex collapses newlines in title/description (no line injection)', (t) => {

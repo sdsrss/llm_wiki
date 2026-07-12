@@ -3,6 +3,7 @@ import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { loadKbConfig } from './templates.mjs'
 import { listWikiPages, isInvalidated, asList, RELATION_CONFIDENCES } from './pages.mjs'
+import { writeFileAtomic } from './json.mjs'
 
 const WIKILINK_RE = /\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]/g
 
@@ -69,7 +70,7 @@ export function buildIndex(kbRoot) {
     const written = new Set()
     for (const [type, list] of Object.entries(byType)) {
       if (!list.length) continue
-      fs.writeFileSync(path.join(p.topics, `${type}.md`), `# ${SECTION_TITLES[type]}\n\n${list.map(line).join('\n')}\n`)
+      writeFileAtomic(path.join(p.topics, `${type}.md`), `# ${SECTION_TITLES[type]}\n\n${list.map(line).join('\n')}\n`)
       written.add(`${type}.md`)
       indexBody += `\n## ${SECTION_TITLES[type]}\nSee [[topics/${type}]] (${list.length} pages)\n`
     }
@@ -81,7 +82,7 @@ export function buildIndex(kbRoot) {
       indexBody += `\n## ${SECTION_TITLES[type]}\n${list.map(line).join('\n')}\n`
     }
   }
-  fs.writeFileSync(p.indexMd, `${indexBody}\n${pending}${tail}`)
+  writeFileAtomic(p.indexMd, `${indexBody}\n${pending}${tail}`)
 
   const ids = new Set(pages.map(pg => pg.relPath.replace(/\.md$/, '')))
   const nodes = pages.map(pg => ({
@@ -114,12 +115,12 @@ export function buildIndex(kbRoot) {
       edges.push({ source: id, target, type: String(rel.type), confidence })
     }
   }
-  fs.writeFileSync(p.graphJson, JSON.stringify({ nodes, edges }, null, 2) + '\n')
+  writeFileAtomic(p.graphJson, JSON.stringify({ nodes, edges }, null, 2) + '\n')
 
   const kbName = path.basename(path.resolve(kbRoot))
   const llms = [`# ${kbName}`, '', `> llm_wiki knowledge base. Read wiki/index.md first, then open full pages.`, '', '## Pages',
     ...pages.filter(pg => !isInvalidated(pg)).map(pg => `- [${inline(pg.data.title)}](wiki/${pg.relPath}): ${inline(pg.data.description)}`)].join('\n') + '\n'
-  fs.writeFileSync(p.llmsTxt, llms)
+  writeFileAtomic(p.llmsTxt, llms)
 
   return { pageCount: pages.length, topicsSplit }
 }
