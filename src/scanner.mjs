@@ -150,6 +150,12 @@ export async function scanSource(srcDir, kbRoot, { exclude = [], persist = true,
   const diff = diffManifest(loadManifest(kbRoot), files.map(f => ({ rel: f.rel, hash: f.hash })))
   const toCompileSet = new Set([...diff.added, ...diff.changed].map(e => e.rel))
   const toCompile = files.filter(f => toCompileSet.has(f.rel) && !exactDups.has(f.rel))
+  // Exact duplicates are excluded from the compile batches (toCompile), so they must not
+  // inflate the reported added/changed counts either — a deduped file is never written to
+  // the manifest, so it would otherwise read as a permanent "+1 to convert" that `convert`
+  // never clears and that contradicts the "0 batches" plan. Dups stay in `duplicates.exact`.
+  const incAdded = diff.added.filter(e => !exactDups.has(e.rel)).length
+  const incChanged = diff.changed.filter(e => !exactDups.has(e.rel)).length
   const batches = []
   for (let i = 0; i < toCompile.length; i += cfg.batchSize) {
     batches.push(toCompile.slice(i, i + cfg.batchSize).map(f => f.rel))
@@ -165,7 +171,7 @@ export async function scanSource(srcDir, kbRoot, { exclude = [], persist = true,
     files: files.map(({ _sig, ...f }) => f),
     skipped,
     duplicates: { exact, near },
-    incremental: { added: diff.added.length, changed: diff.changed.length, removed: diff.removed.length, unchanged: diff.unchanged.length },
+    incremental: { added: incAdded, changed: incChanged, removed: diff.removed.length, unchanged: diff.unchanged.length },
     domainMixture: detectDomainMixture(files, kbRoot),
     batches,
     estimate,

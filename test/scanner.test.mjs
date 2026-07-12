@@ -68,6 +68,10 @@ test('scanSource: dedup, batching, plan file', async (t) => {
   const planned = r.batches.flat()
   assert.equal(planned.length, 8)
   assert.equal(r.batches.length, 2)
+  // The exact dup (a-copy.md) is excluded from the compile set, so it must not inflate
+  // the reported added count either — otherwise it reads as a permanent "+1 to convert"
+  // the compile plan (8 files / 2 batches) never accounts for.
+  assert.equal(r.incremental.added, 8, 'added excludes the exact dup, matching the compile set')
   assert.ok(r.estimate.inputTokens > r.estimate.contentTokens)
   assert.ok(fs.existsSync(path.join(kb, '.scan-plan.json')))
   // convert reads .scan-plan.json in a separate process — it must be written via
