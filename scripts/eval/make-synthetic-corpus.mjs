@@ -5,7 +5,8 @@
 // the BM25-vs-vector reversal point can be measured well past 500 pages.
 //
 // Method: each page is a unique (feature, component) word-pair "subsystem" with a
-// unique throughput fact. Words come from small pools (50×50 = 2500 unique pairs), so
+// throughput fact (numeric, seed-varied; the PAIR is the unique identity, not the
+// number). Words come from small pools (50×50 = 2500 unique pairs), so
 // each individual token repeats across ~N/50 pages — that shared vocabulary is the
 // BM25 distractor pressure that grows with N. Two probe variants per sampled page:
 //   - fact (en): names the pair in English → BM25-favorable same-language retrieval.
@@ -77,6 +78,7 @@ function main() {
   const out = opt('--out', `scripts/eval/corpus/kb-synth-${tier}`)
   const probesOut = opt('--probes-out', `scripts/eval/probes-synth-${tier}.jsonl`)
   const sample = Number.parseInt(opt('--sample', '60'), 10)
+  if (!Number.isInteger(sample) || sample <= 0) { console.error('--sample must be a positive integer'); process.exit(1) }
   const seed = Number.parseInt(opt('--seed', '1'), 10)
   const rnd = mulberry32(seed)
 
@@ -109,6 +111,8 @@ function main() {
       'type: concept',
       `tags: [${JSON.stringify(p.f)}, ${JSON.stringify(p.c)}]`,
       `description: ${JSON.stringify(`The ${p.f} ${p.c} subsystem and its throughput characteristics.`)}`,
+      'sources: []',
+      `created: ${CORPUS_DATE}`,
       `updated: ${CORPUS_DATE}`,
       '---',
     ].join('\n')
@@ -117,10 +121,17 @@ function main() {
 
   const r = buildIndex(out)
 
-  // Sample `sample` pages spread evenly across the corpus for probes.
-  const step = Math.max(1, Math.floor(tier / sample))
+  // Sample `sample` pages spread evenly across the WHOLE corpus (proportional
+  // placement reaches the last page too; an integer stride would drop the tail).
+  // Dedupe indices so sample > tier can't emit duplicate probes for one page.
+  const idxs = []
+  const seenIdx = new Set()
+  for (let j = 0; j < sample; j++) {
+    const i = Math.min(tier - 1, Math.round((j * tier) / sample))
+    if (!seenIdx.has(i)) { seenIdx.add(i); idxs.push(i) }
+  }
   const probeLines = []
-  for (let i = 0; i < tier && probeLines.length < sample * 2; i += step) {
+  for (const i of idxs) {
     const p = pages[i]
     const id = `concepts/${p.slug}`
     // fact (en): names the pair in English -> BM25-favorable same-language retrieval.
