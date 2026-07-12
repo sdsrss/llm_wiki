@@ -54,6 +54,23 @@ test('lintKb missing-field rule fires per absent required field', async (t) => {
   assert.ok(!details.some(x => x.includes('title')), 'present fields not flagged')
 })
 
+test('lintKb flags a type that disagrees with its directory, not a matching one', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'raw/x.md'), 'raw')
+  // type: source but placed in concepts/ — the indexer would file it under "Sources"
+  // while its id/wikilinks say concepts/ (contract: concept↔concepts/).
+  fs.writeFileSync(path.join(d, 'wiki/concepts/mismatch.md'),
+    `---\ntype: source\ntitle: Mismatch\ndescription: d\ntags: [x]\nsources: [raw/x.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nbody [[concepts/mismatch]]`)
+  // a correctly-typed concept in the same dir must NOT be flagged
+  fs.writeFileSync(path.join(d, 'wiki/concepts/ok.md'),
+    `---\ntype: concept\ntitle: Ok\ndescription: d\ntags: [x]\nsources: [raw/x.md]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nbody [[concepts/ok]]`)
+  const r = await lintKb(d)
+  const mismatches = r.mechanical.filter(i => i.rule === 'type-dir-mismatch')
+  assert.deepEqual(mismatches.map(i => i.path), ['concepts/mismatch.md'], 'only the mismatched page is flagged')
+  assert.match(mismatches[0].detail, /type "source" in concepts\/ \(expected "concept"\)/)
+})
+
 test('lintKb flags broken raw body links but not valid ones', async (t) => {
   const d = tmp(t)
   initKb(d)

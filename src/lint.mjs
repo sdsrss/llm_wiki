@@ -7,6 +7,13 @@ import { extractWikilinks, buildIndex } from './indexer.mjs'
 import { loadManifest } from './manifest.mjs'
 import { writeFileAtomic } from './json.mjs'
 
+// The AGENTS.md contract binds each page type to its directory (source↔sources/, …).
+// A page whose `type` disagrees with its directory is silently miscategorized: the
+// indexer groups index.md sections by `type`, but ids / wikilinks / graph nodes use
+// the directory — so e.g. a `type: source` page in concepts/ is filed under "Sources"
+// yet linked as `concepts/…`.
+const DIR_TYPE = { sources: 'source', entities: 'entity', concepts: 'concept', comparisons: 'comparison' }
+
 export async function lintKb(kbRoot, { fix = false } = {}) {
   const p = kbPaths(kbRoot)
   const cfg = loadKbConfig(kbRoot)
@@ -20,6 +27,12 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
   for (const pg of pages) {
     if (pg.error) { mechanical.push({ rule: 'invalid-frontmatter', path: pg.relPath, detail: pg.error }); continue }
     for (const issue of validatePage(pg)) mechanical.push({ rule: 'missing-field', path: pg.relPath, detail: issue })
+    // type must match the directory (AGENTS.md contract) — a mismatch is miscategorized
+    // by the indexer. Skip when type is absent (already flagged as a missing field).
+    const dir = pg.relPath.split('/')[0]
+    if (DIR_TYPE[dir] && pg.data.type !== undefined && pg.data.type !== DIR_TYPE[dir]) {
+      mechanical.push({ rule: 'type-dir-mismatch', path: pg.relPath, detail: `type "${pg.data.type}" in ${dir}/ (expected "${DIR_TYPE[dir]}")` })
+    }
     for (const target of extractWikilinks(pg.body)) {
       if (target.startsWith('raw/')) {
         if (!fs.existsSync(path.join(kbRoot, target)) && !fs.existsSync(path.join(kbRoot, target + '.md'))) mechanical.push({ rule: 'broken-raw-link', path: pg.relPath, detail: `-> ${target}` })
