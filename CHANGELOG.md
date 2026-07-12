@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.7.1 (2026-07-11)
+
+Four defects found by end-to-end dogfooding — one crash-class fix plus three
+robustness/UX fixes. No config change, no KB migration, no retrieval-default
+change. Suite 213 → 221.
+
+**Fixes:**
+
+- **A single malformed page no longer breaks the whole KB.** A frontmatter list
+  field authored as a bare scalar (`tags: cache` instead of `tags: [cache]`)
+  parses as a string, which slipped past the `?? []` guards and then crashed
+  `ask`/`embed` (`.join` on a string) or was iterated character-by-character
+  (`lint` noise; `index` synthesized a bogus graph edge per character, corrupting
+  `graph.json`). List fields now route through an `Array.isArray` guard in every
+  consumer, so one bad page can no longer take down retrieval or the graph.
+  `lint` now flags `tags must be a YAML list` so the author can fix the shape.
+- **`lint` contradiction-scan skips invalidated pages.** Retired knowledge is
+  already excluded from stale-scan and the orphan rule; the shared-tag
+  contradiction scan now matches, so you are never asked to reconcile a
+  contradiction against a dead page.
+- **`convert` exits non-zero when every file fails.** `converted 0, failed N`
+  used to exit `0`, hiding a total failure from CI/scripts. It now exits `1` on
+  total failure; a partial success (some files converted) still exits `0`.
+- **Network errors name the endpoint.** A mistyped `baseURL` or offline host used
+  to surface undici's opaque `fetch failed`; `ask`/`embed` now report
+  `could not reach the LLM/embedding endpoint <url> — check baseURL/network`.
+
 ## 0.7.0 (2026-07-11)
 
 Two retrieval-default changes (hence a minor bump). Both are opt-out via
