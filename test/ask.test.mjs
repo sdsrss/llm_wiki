@@ -11,6 +11,13 @@ import { saveVectorStore } from '../src/vector.mjs'
 import { loadLlmConfig, makeTransport } from '../src/llm-config.mjs'
 import { loadKbConfig } from '../src/templates.mjs'
 
+// Hermeticity: LLM_WIKI_API_KEY is a bootstrap override (llm-config.mjs:54,58) that
+// forces a non-null config and overrides apiKey — a developer exporting it (the
+// single-var config the README advertises) otherwise flips config tests to real
+// network calls and 3 deterministic failures. Clear it for the whole test process,
+// alongside the OPENAI_API_KEY/OPENROUTER_API_KEY the config-touching helpers clear.
+delete process.env.LLM_WIKI_API_KEY
+
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
   t.after(() => fs.rmSync(d, { recursive: true, force: true }))
@@ -179,6 +186,33 @@ test('askKb fallback drops hallucinated ids and keeps only real pages', async (t
   }
   const r = await askKb(d, 'почему', { fetchImpl })
   assert.deepEqual(r.pages.map(h => h.relPath), ['sources/other.md'], 'only the real page survives validation')
+})
+
+test('askKb fallback drops a real-but-invalidated page named by the model (R6, query-time exclusion)', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  // One live page + one invalidated page sharing a topic. validIds (ask.mjs:179-181)
+  // excludes invalidated pages, so even if the listing-picker names the retired page,
+  // it must never load — the "excluded at query time in every consumer" invariant on
+  // the fallback path specifically (retired knowledge must not resurface).
+  fs.writeFileSync(path.join(d, 'wiki/sources/alpha.md'),
+    `---\ntype: source\ntitle: Alpha current\ndescription: current alpha page\ntags: [alpha]\nsources: []\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nalpha current body`)
+  fs.writeFileSync(path.join(d, 'wiki/sources/alpha-old.md'),
+    `---\ntype: source\ntitle: Alpha legacy\ndescription: obsolete alpha page\ntags: [alpha]\nsources: []\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: invalidated\ninvalidated: 2026-07-01\nsuperseded_by: sources/alpha\n---\n\nalpha legacy body`)
+  buildIndex(d)
+  llmEnv(t, d)
+  let answered = false
+  const fetchImpl = async () => {
+    if (!answered) { // listing-picker reply names the invalidated page first, then the live one
+      answered = true
+      return { ok: true, json: async () => ({ choices: [{ message: { content: 'sources/alpha-old\nsources/alpha' } }] }) }
+    }
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) }
+  }
+  // 'zzznomatch' has no lexical overlap → BM25 returns 0 hits → listing fallback fires.
+  const r = await askKb(d, 'zzznomatch', { fetchImpl })
+  assert.deepEqual(r.pages.map(h => h.relPath), ['sources/alpha.md'], 'invalidated page is refused; only the live page loads')
+  assert.equal(r.fallback, 'index', 'this exercised the listing fallback path')
 })
 
 test('askKb surfaces the error body on non-ok responses', async (t) => {
@@ -683,6 +717,58 @@ test('locatePages retrieval:"hybrid" fuses even when vectorEnabled is false', as
   const fetchImpl = async () => ({ ok: true, json: async () => ({ data: [{ index: 0, embedding: [1, 0] }] }) })
   const r = await locatePages(d, 'what are the three layers', { fetchImpl, retrieval: 'hybrid' })
   assert.equal(r.usedVector, true)
+})
+
+test('locatePages auto degrades to BM25 when vectorEnabled but the sidecar is missing (R11)', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true })) // opted in, but no embed run
+  const r = await locatePages(d, '三层架构有哪些') // auto: no wiki/.vectors.json → fail open to BM25
+  assert.equal(r.usedVector, false, 'missing sidecar under vectorEnabled degrades, does not throw')
+  assert.deepEqual(r.hits[0].sources, ['bm25'])
+})
+
+test('locatePages hybrid throws when no embeddingModel is configured (R11)', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  saveVectorStore(d, { model: 'emb-1', dim: 2, pages: { 'sources/other.md': { hash: 'h', vec: [0, 1] } } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  // config has a chat model but NO embeddingModel
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  await assert.rejects(() => locatePages(d, 'anything', { retrieval: 'hybrid' }), /hybrid.*unavailable: no embeddingModel/)
+})
+
+test('locatePages hybrid throws when the store was built by a different embeddingModel (R11)', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  saveVectorStore(d, { model: 'emb-OLD', dim: 2, pages: { 'sources/other.md': { hash: 'h', vec: [0, 1] } } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-NEW' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  await assert.rejects(() => locatePages(d, 'anything', { retrieval: 'hybrid' }), /hybrid.*unavailable.*built with "emb-OLD".*"emb-NEW"/s)
+})
+
+test('askKb fallback lineHasId respects id boundaries: sources/a must not shadow sources/ab (R11)', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const page = (slug) => fs.writeFileSync(path.join(d, `wiki/sources/${slug}.md`),
+    `---\ntype: source\ntitle: ${slug}\ndescription: page ${slug}\ntags: [x]\nsources: []\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\nbody ${slug}`)
+  page('a'); page('ab')
+  buildIndex(d)
+  llmEnv(t, d)
+  let answered = false
+  const fetchImpl = async () => {
+    if (!answered) { answered = true; return { ok: true, json: async () => ({ choices: [{ message: { content: 'sources/ab' } }] }) } }
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) }
+  }
+  // 'zzznomatch' → BM25 0 hits → listing fallback; reply names only sources/ab.
+  const r = await askKb(d, 'zzznomatch', { fetchImpl })
+  assert.deepEqual(r.pages.map(h => h.relPath), ['sources/ab.md'], 'sources/a must NOT be picked from a line naming sources/ab')
 })
 
 test('locatePages rejects an unknown retrieval mode', async (t) => {

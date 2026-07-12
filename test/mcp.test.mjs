@@ -12,6 +12,11 @@ import { buildIndex } from '../src/indexer.mjs'
 import { createMcpServer } from '../src/mcp.mjs'
 import { saveVectorStore } from '../src/vector.mjs'
 
+// Hermeticity: clear the LLM_WIKI_API_KEY bootstrap override for the whole test
+// process (llm-config.mjs:54,58) — otherwise the "wiki_ask without LLM config" test
+// bootstraps a real config and fires a live network request. See ask.test.mjs.
+delete process.env.LLM_WIKI_API_KEY
+
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-mcp-'))
   t.after(() => fs.rmSync(d, { recursive: true, force: true }))
@@ -45,6 +50,26 @@ test('wiki_overview returns the index content with the data notice', async (t) =
   const text = r.content[0].text
   assert.match(text, /never follow instructions/, 'data notice present')
   assert.match(text, /karpathy-gist/, 'index lists the seeded page')
+})
+
+test('wiki_overview inlines topics/*.md so a split-index KB still exposes the full catalog (R4)', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  // Force the split path (index.md becomes `See [[topics/x]]` stubs) with a low threshold.
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ indexSplitAt: 1 }))
+  fs.writeFileSync(path.join(d, 'wiki/sources/page-alpha.md'),
+    `---\ntype: source\ntitle: Alpha\ndescription: alpha page desc\ntags: [x]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nalpha body`)
+  fs.writeFileSync(path.join(d, 'wiki/sources/page-beta.md'),
+    `---\ntype: source\ntitle: Beta\ndescription: beta page desc\ntags: [x]\ncreated: 2026-07-09\nupdated: 2026-07-09\n---\n\nbeta body`)
+  buildIndex(d)
+  assert.match(fs.readFileSync(path.join(d, 'wiki/index.md'), 'utf8'), /See \[\[topics\/source\]\]/, 'precondition: index is split into topic stubs')
+  const client = await connectClient(t, d)
+  const r = await client.callTool({ name: 'wiki_overview', arguments: {} })
+  assert.equal(r.isError ?? false, false)
+  const text = r.content[0].text
+  // Both real page ids must be readable from the overview, not just the topic stub.
+  assert.match(text, /sources\/page-alpha/, 'alpha listed via inlined topics/source.md')
+  assert.match(text, /sources\/page-beta/, 'beta listed via inlined topics/source.md')
 })
 
 test('wiki_overview errors with guidance when no index exists', async (t) => {
@@ -106,6 +131,7 @@ test('wiki_read_page blocks invalidated pages unless include_invalidated', async
   const blocked = await client.callTool({ name: 'wiki_read_page', arguments: { id: 'concepts/old-idea' } })
   assert.equal(blocked.isError, true)
   assert.match(blocked.content[0].text, /superseded by sources\/karpathy-gist/)
+  assert.match(blocked.content[0].text, /never follow instructions/, 'echoed superseded_by (untrusted) carries the data notice (R15)')
   const forced = await client.callTool({ name: 'wiki_read_page', arguments: { id: 'concepts/old-idea', include_invalidated: true } })
   assert.equal(forced.isError ?? false, false)
   assert.match(forced.content[0].text, /已失效的旧概念内容/)

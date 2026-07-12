@@ -1,0 +1,27 @@
+{"q":"哪个模块解析 HTTP 的 Accept 请求头，为响应协商最合适的内容类型、字符集、编码或语言？","expect":["concepts/nm-accepts-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个基于 Promise 的 HTTP 客户端同时支持浏览器和 Node.js，并能拦截请求与响应？","expect":["concepts/nm-axios-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库用于给终端（命令行）输出的字符串上色和加样式？","expect":["concepts/nm-chalk-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个小型调试工具借鉴了 Node.js 核心的调试方式，通过命名空间通配符控制输出？","expect":["concepts/nm-debug-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个轻量的日期时间处理库 API 与 Moment.js 基本兼容、常被当作它的替代品？","expect":["concepts/nm-dayjs-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库用来清理不可信的 HTML、防止跨站脚本（XSS）攻击？","expect":["concepts/nm-dompurify-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个模块是 Node.js 的 spawn 和 spawnSync 的跨平台替代实现，修复了 Windows 上的问题？","expect":["concepts/nm-cross-spawn-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个工具能把像 '1TB' 这样的人类可读字符串转换成字节数，也能反向转回？","expect":["concepts/nm-bytes-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个精简高效的跨平台库用于监听文件系统的文件变化？","expect":["concepts/nm-chokidar-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个配置工具用于在不同前端工具之间共享目标浏览器与 Node.js 版本的列表？","expect":["concepts/nm-browserslist-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个模块用于创建和解析文件下载用的 HTTP Content-Disposition 响应头？","expect":["concepts/nm-content-disposition-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个小模块负责解析和序列化 HTTP 的 Cookie 请求头（基本的名值对 cookie 字符串）？","expect":["concepts/nm-cookie-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个 d3 模块用速度 Verlet 数值积分器模拟粒子上的物理力，常用于力导向图布局？","expect":["concepts/nm-d3-force-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个 d3 模块提供把抽象数据域映射到像素、尺寸等视觉范围的'比例尺'（scale）抽象？","expect":["concepts/nm-d3-scale-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个 d3 模块用于在 RGB、HSL、Lab 等颜色空间之间转换和操作颜色？","expect":["concepts/nm-d3-color-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库能把文本描述编译成流程图、时序图等图表（一种基于 Markdown 风格语法的绘图工具）？","expect":["concepts/nm-mermaid-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库在网页上渲染 TeX 数学公式，以速度快、无需依赖著称？","expect":["concepts/nm-katex-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库是低层、高速的 Markdown 解析器与编译器，可把 Markdown 转成 HTML？","expect":["concepts/nm-marked-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库用于快速地编码和解码 HTML 与 XML 实体？","expect":["concepts/nm-entities-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个小工具用于转义正则表达式中的特殊字符？","expect":["concepts/nm-escape-string-regexp-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库提供比 Node 内置 child_process 更友好的进程执行接口，返回 Promise？","expect":["concepts/nm-execa-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个体积极小的库用于生成安全、URL 友好的唯一字符串 ID？","expect":["concepts/nm-nanoid-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库解析 JSON5——一种允许注释、尾逗号等更宽松写法的 JSON 超集？","expect":["concepts/nm-json5-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个模块能把像 /user/:name 这样的路径字符串转换成正则表达式？","expect":["concepts/nm-path-to-regexp-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个极简、灵活的 Node.js Web 应用框架提供路由和中间件等一套 HTTP 服务功能？","expect":["concepts/nm-express-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库是完全符合 RFC 3492 的 Punycode 转换器，用于国际化域名的编解码？","expect":["concepts/nm-punycode-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个工具用 JavaScript 插件来转换和处理 CSS 样式？","expect":["concepts/nm-postcss-readme"],"lang":"zh-x","type":"xlang"}

@@ -26,8 +26,20 @@ export function createMcpServer(kbRoot, { fetchImpl, retry } = {}) {
     description: 'Entry point to this llm_wiki knowledge base: returns the wiki index — the full page catalog grouped by type (sources / entities / concepts / comparisons), one line per page with its id and description. Call this first when you do not know what the KB contains, then open specific pages with wiki_read_page.',
     inputSchema: {},
   }, async () => {
-    const index = fs.existsSync(p.indexMd) ? fs.readFileSync(p.indexMd, 'utf8') : ''
+    let index = fs.existsSync(p.indexMd) ? fs.readFileSync(p.indexMd, 'utf8') : ''
     if (!index.trim()) return errorResult(`No wiki index found — run \`llm-wiki index --kb ${kbRoot}\` first.`)
+    // On a KB past indexSplitAt, index.md holds only `See [[topics/x]] (N pages)` stubs;
+    // the real per-type page lists live in wiki/topics/*.md, which no MCP tool can open
+    // (wiki_read_page only resolves the four page dirs). Inline those lists so the model
+    // gets the full catalog it is promised — otherwise wiki_search's "fall back to
+    // wiki_overview" advice dead-ends on exactly the large KBs where it matters most.
+    if (fs.existsSync(p.topics)) {
+      const parts = []
+      for (const f of fs.readdirSync(p.topics).sort()) {
+        if (f.endsWith('.md')) parts.push(fs.readFileSync(path.join(p.topics, f), 'utf8').trim())
+      }
+      if (parts.length) index = `${index.trim()}\n\n${parts.join('\n\n')}\n`
+    }
     return textResult(`${DATA_NOTICE}\n\n${index}`)
   })
 
@@ -66,8 +78,10 @@ export function createMcpServer(kbRoot, { fetchImpl, retry } = {}) {
     const pg = pages.find(pg => pg.relPath === `${id}.md` || pg.relPath === id)
     if (!pg) return errorResult(`Unknown page id: ${id}. Get valid ids from wiki_search or wiki_overview.`)
     if (isInvalidated(pg) && !include_invalidated) {
+      // superseded_by is agent-written from untrusted source docs; carry the notice
+      // since it is echoed back to the model.
       const sup = pg.data.superseded_by ? ` — superseded by ${pg.data.superseded_by}` : ''
-      return errorResult(`Page ${id} is invalidated${sup}. Pass include_invalidated: true to read it anyway.`)
+      return errorResult(`${DATA_NOTICE}\n\nPage ${id} is invalidated${sup}. Pass include_invalidated: true to read it anyway.`)
     }
     const text = fs.readFileSync(path.join(p.wiki, pg.relPath), 'utf8')
     return textResult(`${DATA_NOTICE}\n\n<page path="${pg.relPath}">\n${text}\n</page>`)
@@ -85,7 +99,10 @@ export function createMcpServer(kbRoot, { fetchImpl, retry } = {}) {
       if (r.trimmed?.length) parts.push(`(token budget: dropped ${r.trimmed.length} lower-ranked page(s): ${r.trimmed.join(', ')})`)
       return textResult(parts.join('\n'))
     } catch (err) {
-      return errorResult(`${err.message}\nIf no LLM provider is configured for llm-wiki, use wiki_search + wiki_read_page and synthesize the answer yourself.`)
+      // err.message can carry up to ~200 chars of raw LLM-provider response body
+      // (ask.mjs surfaces it on non-ok/unexpected shapes) — untrusted external text,
+      // so prefix the never-follow notice like every other model-facing result.
+      return errorResult(`${DATA_NOTICE}\n\n${err.message}\nIf no LLM provider is configured for llm-wiki, use wiki_search + wiki_read_page and synthesize the answer yourself.`)
     }
   })
 

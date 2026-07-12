@@ -77,9 +77,19 @@ test('buildIndex writes its derived stores atomically (no .tmp residue, parseabl
   // every derived store. Absence of the .tmp sibling is the signature of that path.
   fs.writeFileSync(path.join(d, 'wiki/sources/art.md'), page('source', 'Article', 'links [[entities/kar]]'))
   fs.writeFileSync(path.join(d, 'wiki/entities/kar.md'), page('entity', 'Karpathy'))
+  // Spy on fs.renameSync (writeFileAtomic's only distinguishing call): ESM `import fs`
+  // shares one module namespace across every consumer, so recording rename destinations
+  // proves each store went temp+rename. A regression to a bare fs.writeFileSync would
+  // NOT rename its target — the assertion below then fails, unlike the .tmp-residue check
+  // (which a direct write also passes, since it never creates a .tmp). Guards mem #10097.
+  const origRename = fs.renameSync
+  const renamedTo = []
+  fs.renameSync = (from, to) => { renamedTo.push(path.relative(d, to)); return origRename(from, to) }
+  t.after(() => { fs.renameSync = origRename })
   buildIndex(d)
   for (const f of ['wiki/graph.json', 'wiki/index.md', 'llms.txt']) {
     assert.ok(!fs.existsSync(path.join(d, `${f}.tmp`)), `${f} written via atomic rename, no leftover temp`)
+    assert.ok(renamedTo.includes(f), `${f} was written through writeFileAtomic (rename observed), not a direct truncating write`)
   }
   assert.doesNotThrow(() => JSON.parse(fs.readFileSync(path.join(d, 'wiki/graph.json'), 'utf8')), 'graph.json is whole and parseable')
 })

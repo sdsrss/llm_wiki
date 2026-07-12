@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // One command → full eval report (retrieval per KB/tier + answer-level).
 // Usage: node scripts/eval/run-all.mjs --kb ./kb [--tiers 50,150]
-//        [--arms bm25,vector,hybrid,graph] [--judge-model M] [-k 5]
+//        [--arms bm25,vector,hybrid,auto,graph] [--judge-model M] [-k 5]
 // Sections whose prerequisites are missing are SKIPPED with the reason in the
 // report — never silently.
 import fs from 'node:fs'
@@ -12,7 +12,7 @@ const args = process.argv.slice(2)
 const opt = (name, dflt) => { const i = args.indexOf(name); return i === -1 ? dflt : args[i + 1] }
 const kb = opt('--kb', './kb')
 const tiers = opt('--tiers', '50,150').split(',').filter(Boolean)
-const arms = opt('--arms', 'bm25,vector,hybrid,graph')
+const arms = opt('--arms', 'bm25,vector,hybrid,auto,graph')
 const judgeModel = opt('--judge-model', null)
 const k = opt('-k', '5')
 

@@ -9,6 +9,11 @@ import { embedTexts, embedKb } from '../src/embed.mjs'
 import { loadVectorStore, pageEmbedText } from '../src/vector.mjs'
 import { listWikiPages, isInvalidated } from '../src/pages.mjs'
 
+// Hermeticity: clear the LLM_WIKI_API_KEY bootstrap override for the whole test
+// process (llm-config.mjs:54,58). The one test that exercises it sets+restores it
+// locally (search LLM_WIKI_API_KEY below). See ask.test.mjs.
+delete process.env.LLM_WIKI_API_KEY
+
 // Recompute embed.mjs's worst-case cap formula inline (import nothing new across
 // modules): CJK char = 1 token, everything else = 0.5 token (pessimistic BPE).
 function worstCaseEmbedTokens(text) {

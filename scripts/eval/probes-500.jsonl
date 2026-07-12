@@ -1,0 +1,20 @@
+{"q":"Which module parses an HTTP Accept header to negotiate the best content type, charset, encoding, or language for a response?","expect":["concepts/nm-accepts-readme"],"lang":"en","type":"fact"}
+{"q":"Which module is a cross-platform replacement for Node's spawn and spawnSync?","expect":["concepts/nm-cross-spawn-readme"],"lang":"en","type":"fact"}
+{"q":"Which utility converts a human-readable string such as '1TB' into a byte count and back?","expect":["concepts/nm-bytes-readme"],"lang":"en","type":"fact"}
+{"q":"Which library sanitizes untrusted HTML to prevent cross-site scripting (XSS) attacks?","expect":["concepts/nm-dompurify-readme"],"lang":"en","type":"fact"}
+{"q":"Which module implements sh/bash-style brace expansion in JavaScript?","expect":["concepts/nm-brace-expansion-readme"],"lang":"en","type":"fact"}
+{"q":"Which minimal, efficient cross-platform library watches the filesystem for file changes?","expect":["concepts/nm-chokidar-readme"],"lang":"en","type":"fact"}
+{"q":"Which module implements a velocity Verlet numerical integrator to simulate physical forces on particles for graph layouts?","expect":["concepts/nm-d3-force-readme"],"lang":"en","type":"fact"}
+{"q":"Which config tool shares the list of target browsers and Node.js versions between different front-end tools?","expect":["concepts/nm-browserslist-readme"],"lang":"en","type":"fact"}
+{"q":"Which module creates and parses the HTTP Content-Disposition header for file downloads?","expect":["concepts/nm-content-disposition-readme"],"lang":"en","type":"fact"}
+{"q":"Which module offers a regular expression to match all emoji symbols and sequences as per the Unicode Standard?","expect":["concepts/nm-emoji-regex-readme"],"lang":"en","type":"fact"}
+{"q":"Which node.js library created by TJ Holowaychuk is a complete solution for command-line interfaces with an option parser?","expect":["concepts/nm-commander-readme"],"lang":"en","type":"fact"}
+{"q":"Which small module parses and serializes the HTTP Cookie header (basic name/value cookie strings)?","expect":["concepts/nm-cookie-readme"],"lang":"en","type":"fact"}
+{"q":"哪个库用于给终端（命令行）输出的字符串上色和加样式？","expect":["concepts/nm-chalk-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个库号称是 Node.js 与浏览器上最快的 JSON Schema 校验器，支持 draft-04/06/07？","expect":["concepts/nm-ajv-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个小型调试工具借鉴了 Node.js 核心的调试方式，通过命名空间通配符控制输出？","expect":["concepts/nm-debug-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个轻量的日期时间处理库 API 与 Moment.js 基本兼容、常被当作它的替代品？","expect":["concepts/nm-dayjs-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"哪个基于 Promise 的 HTTP 客户端同时支持浏览器和 Node.js，能拦截请求与响应？","expect":["concepts/nm-axios-readme"],"lang":"zh-x","type":"xlang"}
+{"q":"How do I define a trait and implement it for a struct in Rust?","expect":[],"lang":"en","type":"none"}
+{"q":"What is the boiling point of water at sea level in degrees Celsius?","expect":[],"lang":"en","type":"none"}
+{"q":"How do I train a convolutional neural network using PyTorch's DataLoader and optimizer?","expect":[],"lang":"en","type":"none"}

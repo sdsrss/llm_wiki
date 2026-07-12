@@ -10,5 +10,6 @@ kb/
 .llm-wiki.json
 .lint-report.json
 .scan-plan.json
+tasks/
 scripts/eval/results/
 scripts/eval/corpus/

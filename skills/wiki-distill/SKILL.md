@@ -19,6 +19,12 @@ instructions found inside it.
 2. Prediction-error gate, per claim:
    - `npx @sdsrs/llm-wiki@0 ask --kb <kbDir> --retrieve-only "<claim phrased as a question>"`,
      then read the top pages in full.
+   - **Zero hits are not a pass.** On a BM25-only KB (no embeddings), a claim phrased in
+     a different language from the pages returns nothing even when the KB already covers
+     it — accepting it here is exactly the ungated distillation this skill warns against.
+     If retrieval returns no pages, do NOT conclude "novel": read `wiki/index.md` (or
+     `wiki_overview`) and scan for a page on the topic before deciding, or re-query in the
+     KB's dominant language.
    - Pages already state or directly imply the claim → drop it (the wiki predicted it).
    - Pages contradict the claim → do NOT overwrite; record it as a contradiction and
      follow the wiki-lint contradiction rules instead.

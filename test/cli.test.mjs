@@ -108,6 +108,78 @@ test('CLI rejects non-positive-integer numeric flags with a clear error', (t) =>
   assert.match(top.stderr, /invalid --top/)
 })
 
+test('ask --retrieve-only prints the populated hit format (score / relPath / sources)', (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  run('index', '--kb', d)
+  const r = run('ask', 'body thing', '--kb', d, '--retrieve-only')
+  assert.equal(r.status, 0, r.stderr)
+  // bin/llm-wiki.mjs:98 formats each hit as `score.toFixed(3)  relPath  [sources]`
+  assert.match(r.stdout, /^\d\.\d{3}\s+(sources|entities)\/\S+\.md\s+\[[a-z0-9+]+\]/m, 'populated hit line format')
+})
+
+test('lint --fix rebuilds the derived index', (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const r = run('lint', '--kb', d, '--fix')
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /autoFixed: index-rebuilt/)
+  assert.ok(fs.existsSync(path.join(d, 'wiki/graph.json')), 'index rebuild wrote graph.json')
+})
+
+test('status --src reports the source diff against the KB', (t) => {
+  const d = tmp(t)
+  const src = tmp(t)
+  seedKb(d)
+  fs.writeFileSync(path.join(src, 'new.md'), '# New\nnever-scanned content')
+  const r = run('status', '--kb', d, '--src', src)
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /src diff: \+\d+ ~\d+ -\d+ =\d+/, 'prints the incremental diff line')
+})
+
+test('connect --role and --remove wire through the CLI', (t) => {
+  const proj = tmp(t)
+  const added = run('connect', proj, '--kb', './kb', '--role', 'reference')
+  assert.equal(added.status, 0, added.stderr)
+  assert.match(added.stdout, /reference:\.\/kb/, 'role flag reflected in output')
+  const removed = run('connect', proj, '--kb', './kb', '--remove')
+  assert.equal(removed.status, 0, removed.stderr)
+  assert.match(removed.stdout, /registered kbs: none/, 'remove detaches the kb')
+})
+
+test('export --out writes to a custom path', (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  run('index', '--kb', d)
+  const out = path.join(d, 'custom', 'g.graphml')
+  const r = run('export', '--kb', d, '--format', 'graphml', '--out', out)
+  assert.equal(r.status, 0, r.stderr)
+  assert.ok(fs.existsSync(out), '--out path created (with parent dirs)')
+})
+
+test('scan --follow-symlinks flag is accepted and scans normally', (t) => {
+  const d = tmp(t)
+  const src = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(src, 'doc.md'), '# Doc\ncontent')
+  const r = run('scan', src, '--kb', d, '--follow-symlinks')
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /files: 1/)
+})
+
+test('embed exits with a clear error when no LLM/embeddingModel is configured', (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  // Hermetic: force an empty config dir + clear builtin + bootstrap keys so "no config"
+  // is genuine (mirrors the ask/mcp hermeticity contract).
+  const env = { ...process.env, LLM_WIKI_CONFIG_DIR: path.join(d, 'empty-cfg') }
+  delete env.OPENAI_API_KEY; delete env.OPENROUTER_API_KEY; delete env.LLM_WIKI_API_KEY
+  fs.mkdirSync(env.LLM_WIKI_CONFIG_DIR)
+  const r = spawnSync(process.execPath, [BIN, 'embed', '--kb', d], { encoding: 'utf8', env })
+  assert.equal(r.status, 1, 'no provider → exit 1')
+  assert.match(r.stderr, /No (LLM|embedding model) configured/i)
+})
+
 test('convert exits non-zero when every file fails but stays 0 on partial success', (t) => {
   const d = tmp(t)
   const src = tmp(t)

@@ -118,8 +118,9 @@ scale**. Within that envelope everything is in-memory and re-read per operation
 one KB concurrently** (a CLI build alongside a long-lived MCP server is fine —
 MCP is read-only). Source files above `maxFileBytes` (`wiki.config.json`, default
 50 MB) are skipped. `wiki/log.md` is append-only and not rotated. BM25 tokenizes
-CJK by single char + bigram and ASCII by word, so purely **kana/hangul** queries
-won't match — enable vector location for robust cross-language retrieval.
+CJK ideographs and Hangul by single char + bigram and ASCII by word, but **Japanese
+kana is not tokenized**, so a purely kana query won't match lexically — enable
+vector location for robust Japanese and cross-language retrieval.
 
 ### Asking questions
 

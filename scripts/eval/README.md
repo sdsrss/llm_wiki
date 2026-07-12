@@ -20,16 +20,20 @@ only by answer-eval, skipped by retrieval eval).
 |---|---|---|
 | probes-kb.jsonl | ./kb (35 zh pages, real links) | fact, multihop, xlang, none |
 | probes-50.jsonl / probes-150.jsonl | generated tiers | fact, xlang, none (no multihop: generated pages have no cross-page links) |
+| probes-500.jsonl / probes-500-xlang.jsonl / probes-500-zh.jsonl | 500-page generated tier | fact (base), xlang (cross-language), zh — used for the v0.8.0 `lexicalGuard` cross-language measurements |
 
 ## Pieces
 
-    node scripts/eval/eval.mjs --kb ./kb --arms bm25,vector,hybrid,graph -k 5
+    node scripts/eval/eval.mjs --kb ./kb --arms bm25,vector,hybrid,auto,graph -k 5
 
 Retrieval Recall@k / MRR / latency per arm, overall + per probe type. `bm25`
-needs no network; `vector`/`hybrid`/`graph` need `wiki/.vectors.json`
-(`llm-wiki embed`) + an embeddingModel. `graph` additionally needs a graph.json
-with edges; it is an experiment (degree-prior third RRF signal) that lives only
-in this harness.
+needs no network; `vector`/`hybrid`/`auto`/`graph` need `wiki/.vectors.json`
+(`llm-wiki embed`) + an embeddingModel. `auto` mirrors the **production default**
+(`src/ask.mjs` `locatePages`): BM25 + vector fused, with the cross-language
+lexical-disjoint guard applied per the KB's `wiki.config.json` `lexicalGuard`;
+`hybrid` is the always-fuse baseline (guard off). `graph` additionally needs a
+graph.json with edges; it is an experiment (degree-prior third RRF signal) that
+lives only in this harness.
 Measured 2026-07-11 on ./kb (24 probes, k=5): graph Recall@5 0.938 vs hybrid 0.979 with an xlang regression (0.833 vs 1.000) — negative result, not promoted to `ask`.
 
 Weighted-RRF / vector-first experiment (2026-07-11, offline recombination of

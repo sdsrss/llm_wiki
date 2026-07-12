@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sha256Text, minhashSignature, jaccardEstimate } from '../src/hashing.mjs'
+import { sha256Text, minhashSignature, jaccardEstimate, MINHASH_MAX_SHINGLE_CHARS } from '../src/hashing.mjs'
 
 test('sha256Text is stable', () => {
   assert.equal(sha256Text('abc'), sha256Text('abc'))
@@ -36,4 +36,21 @@ test('minhash: a true-~0.90 near-duplicate clears the 0.85 threshold at the defa
   const b = a + 'EXTRA trailing line added here only\n'
   assert.ok(jaccardEstimate(minhashSignature(a), minhashSignature(b)) >= 0.85,
     'default-perm minhash must estimate a true-0.90 pair at or above the 0.85 threshold')
+})
+
+test('minhash: shingling is capped to a prefix so cost stays bounded on huge inputs (R3)', () => {
+  // minhashSignature is O(len x perms); the scanner's 50MB file cap does not bound it,
+  // so a large legit text file would hang `scan`. The scan is capped to the first
+  // MINHASH_MAX_SHINGLE_CHARS of normalized text. Two inputs sharing that whole prefix
+  // but diverging only afterwards must produce IDENTICAL signatures — proof that bytes
+  // past the cap are never shingled (the deterministic stand-in for the perf bound).
+  const prefix = 'x'.repeat(MINHASH_MAX_SHINGLE_CHARS + 100)
+  const a = prefix + 'AAAAAAAAAA totally different tail A'
+  const b = prefix + 'BBBBBBBBBB totally different tail B'
+  assert.deepEqual(minhashSignature(a), minhashSignature(b),
+    'content beyond MINHASH_MAX_SHINGLE_CHARS must not affect the signature')
+  // And the cap does not perturb small inputs (the common case): a sub-cap document
+  // still signs its full content, so near-dup detection below the cap is unchanged.
+  const small = 'the quick brown fox jumps over the lazy dog, repeatedly and distinctly '.repeat(20)
+  assert.equal(minhashSignature(small).length, 128)
 })
