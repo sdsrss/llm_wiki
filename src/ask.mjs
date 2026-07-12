@@ -2,13 +2,45 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { loadKbConfig } from './templates.mjs'
-import { listWikiPages, isInvalidated, asList } from './pages.mjs'
+import { listWikiPages, isInvalidated, asList, PAGE_DIRS } from './pages.mjs'
 import { buildBm25Index, searchBm25 } from './bm25.mjs'
 import { worstCaseTokens } from './scanner.mjs'
 import { loadLlmConfig, makeTransport } from './llm-config.mjs'
 import { loadVectorStore, normalize, cosineTopK } from './vector.mjs'
 import { embedTexts } from './embed.mjs'
 import { fetchWithRetry } from './retry.mjs'
+
+// One built BM25 index per KB root, reused across queries while the wiki pages and
+// title-weight config are unchanged. The cost being cached is reading + tokenizing
+// every page: a CLI process builds it once and exits (cache is transparent there), but
+// a long-lived MCP server otherwise rebuilds from disk on every wiki_search. Bounded so
+// a process serving many KBs can't grow it without limit.
+const bm25Cache = new Map()
+const BM25_CACHE_MAX = 8
+
+// Cheap freshness token: each live page file's mtime+size plus the title weight. Any
+// page add / remove / in-place edit / invalidation (a frontmatter status change IS a
+// content change) or config change flips the token and forces a rebuild — so the cache
+// can never serve a stale index. Statting the page set is far cheaper than reading and
+// tokenizing it; MCP is read-only and never mutates pages while serving, so within one
+// server's lifetime pages change only via a separate build process (which rewrites
+// files with new mtimes).
+function pageSetToken(kbRoot, w) {
+  const wiki = kbPaths(kbRoot).wiki
+  const parts = [`w=${w}`]
+  for (const dir of PAGE_DIRS) {
+    let entries
+    try { entries = fs.readdirSync(path.join(wiki, dir)) } catch { continue }
+    for (const f of entries.sort()) {
+      if (!f.endsWith('.md')) continue
+      try {
+        const st = fs.statSync(path.join(wiki, dir, f))
+        parts.push(`${dir}/${f}:${st.mtimeMs}:${st.size}`)
+      } catch { /* vanished mid-scan: next call rebuilds */ }
+    }
+  }
+  return parts.join('|')
+}
 
 export function retrievePages(kbRoot, question, k = 6) {
   // Title is a field: repeat it bm25TitleWeight times in the indexed text so a
@@ -18,12 +50,20 @@ export function retrievePages(kbRoot, question, k = 6) {
   // loadKbConfig guarantees a finite integer >= 1; cap the upper bound so a large
   // value can't materialize a giant per-page array (Array(w).fill) and OOM retrieval.
   const w = Math.min(25, loadKbConfig(kbRoot).bm25TitleWeight)
-  const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
-  const idx = buildBm25Index(pages.map(p => ({
-    id: p.relPath,
-    text: [Array(w).fill(p.data.title ?? '').join('\n'), p.data.description, asList(p.data.tags).join(' '), p.body].join('\n'),
-  })))
-  return searchBm25(idx, question, k).map(h => ({ relPath: h.id, score: h.score }))
+  const token = pageSetToken(kbRoot, w)
+  let entry = bm25Cache.get(kbRoot)
+  if (!entry || entry.token !== token) {
+    const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
+    const idx = buildBm25Index(pages.map(p => ({
+      id: p.relPath,
+      text: [Array(w).fill(p.data.title ?? '').join('\n'), p.data.description, asList(p.data.tags).join(' '), p.body].join('\n'),
+    })))
+    bm25Cache.delete(kbRoot) // re-insert so this KB becomes most-recent for LRU eviction
+    bm25Cache.set(kbRoot, { token, idx })
+    while (bm25Cache.size > BM25_CACHE_MAX) bm25Cache.delete(bm25Cache.keys().next().value)
+    entry = bm25Cache.get(kbRoot)
+  }
+  return searchBm25(entry.idx, question, k).map(h => ({ relPath: h.id, score: h.score }))
 }
 
 const RRF_K = 60

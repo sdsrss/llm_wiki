@@ -3,7 +3,7 @@ import path from 'node:path'
 import { kbPaths } from './paths.mjs'
 import { parseFrontmatter } from './frontmatter.mjs'
 
-const PAGE_DIRS = ['sources', 'entities', 'concepts', 'comparisons']
+export const PAGE_DIRS = ['sources', 'entities', 'concepts', 'comparisons']
 const REQUIRED = ['type', 'title', 'description', 'tags', 'created', 'updated']
 
 export const PAGE_STATUSES = ['active', 'invalidated']

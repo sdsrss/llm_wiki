@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.2 (2026-07-12)
+
+Performance, no behavior change. Suite 260 → 261.
+
+**Changed:**
+
+- **Retrieval no longer rebuilds the BM25 index from disk on every query.** The
+  index is cached per KB and reused while the wiki pages and `bm25TitleWeight` are
+  unchanged; a cheap freshness token (each live page's mtime + size) rebuilds it on
+  any page add / edit / removal / invalidation or config change, so results are
+  never stale. A one-shot CLI call is unaffected (it built the index once anyway);
+  a long-lived MCP server drops per-`wiki_search` cost (~9× on the dogfood KB:
+  9.4 ms → 1.0 ms/query). Cache is bounded (last 8 KBs).
+
 ## 0.8.1 (2026-07-12)
 
 Audit-driven remediation batch (see the v0.8.0 audit report): test-gate

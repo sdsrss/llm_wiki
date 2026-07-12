@@ -771,6 +771,27 @@ test('askKb fallback lineHasId respects id boundaries: sources/a must not shadow
   assert.deepEqual(r.pages.map(h => h.relPath), ['sources/ab.md'], 'sources/a must NOT be picked from a line naming sources/ab')
 })
 
+test('retrievePages caches the BM25 index but invalidates on any page-set change (R20)', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  const page = (slug, body, extraFm = '') => fs.writeFileSync(path.join(d, `wiki/sources/${slug}.md`),
+    `---\ntype: source\ntitle: ${slug}\ndescription: d\ntags: [x]\nsources: []\ncreated: 2026-07-01\nupdated: 2026-07-01${extraFm}\n---\n\n${body}`)
+  page('alpha', 'zebra content')
+  assert.deepEqual(retrievePages(d, 'zebra', 6).map(h => h.relPath), ['sources/alpha.md']) // builds + caches
+  // A term only in a NEWLY ADDED page must be found — a cache-forever bug would miss it.
+  page('beta', 'quokka content')
+  assert.deepEqual(retrievePages(d, 'quokka', 6).map(h => h.relPath), ['sources/beta.md'],
+    'added page is searchable → token saw the new file')
+  // An in-place edit (content grows → size changes) must be reflected.
+  page('alpha', 'zebra content with narwhal added')
+  assert.deepEqual(retrievePages(d, 'narwhal', 6).map(h => h.relPath), ['sources/alpha.md'],
+    'in-place edit reflected → token includes mtime/size')
+  // Invalidating a page (frontmatter status change) must drop it from retrieval.
+  page('beta', 'quokka content', '\nstatus: invalidated')
+  assert.deepEqual(retrievePages(d, 'quokka', 6).map(h => h.relPath), [],
+    'invalidated page drops out → token changed on the frontmatter edit')
+})
+
 test('locatePages rejects an unknown retrieval mode', async (t) => {
   const d = tmp(t)
   seedKb(d)
