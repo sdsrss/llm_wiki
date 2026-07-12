@@ -237,7 +237,9 @@ async function pickPagesFromListing(p, question, k, cfg, t, validIds) {
 export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fetchImpl, retrieval = 'auto', retry, pipelineFactory } = {}) {
   const p = kbPaths(kbRoot)
   let { hits } = await locatePages(kbRoot, question, { k, fetchImpl, retrieval, retry, pipelineFactory })
-  if (retrieveOnly) return { pages: hits, answer: null }
+  // kbEmpty lets the CLI tell "no pages built yet" apart from "pages exist but none
+  // matched". Only pay the livePages listing when there were zero hits to explain.
+  if (retrieveOnly) return { pages: hits, answer: null, kbEmpty: hits.length === 0 && livePages(kbRoot).length === 0 }
   let validIds
   if (hits.length === 0) {
     validIds = new Set(livePages(kbRoot).map(pg => pg.relPath.replace(/\.md$/, '')))

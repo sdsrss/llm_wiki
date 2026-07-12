@@ -869,6 +869,26 @@ test('ask --retrieve-only emits a stderr diagnostic (not silence) when 0 pages l
   assert.match(r.stderr, /no pages located/, 'a human-readable diagnostic goes to stderr')
 })
 
+test('ask --retrieve-only tells a populated KB with no match apart from an empty wiki', (t) => {
+  const d = tmp(t)
+  seedKb(d) // has pages, vectorEnabled:false -> pure BM25, no network
+  const r = spawnSync(process.execPath, [BIN, 'ask', 'zzzznonexistentqqqterm', '--kb', d, '--retrieve-only'],
+    { encoding: 'utf8', env: { ...process.env, OPENAI_API_KEY: '', OPENROUTER_API_KEY: '' } })
+  assert.equal(r.status, 0, 'a valid query returning no match is not an error')
+  assert.equal(r.stdout.trim(), '', 'stdout stays pipe-clean')
+  assert.match(r.stderr, /no wiki page matched your query/, 'points at the query, not at building pages')
+  assert.doesNotMatch(r.stderr, /wiki-build skill/, 'does not tell a full KB to go build pages it already has')
+})
+
+test('ask rejects an empty/whitespace question instead of running a no-op search', (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const r = spawnSync(process.execPath, [BIN, 'ask', '   ', '--kb', d, '--retrieve-only'],
+    { encoding: 'utf8', env: { ...process.env, OPENAI_API_KEY: '', OPENROUTER_API_KEY: '' } })
+  assert.equal(r.status, 1, 'an empty question is a usage error, not a search')
+  assert.match(r.stderr, /empty question/)
+})
+
 test('loadKbConfig defaults lexicalGuard true and coerces non-booleans to the default', (t) => {
   const d = tmp(t)
   initKb(d)
