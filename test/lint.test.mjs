@@ -102,6 +102,22 @@ test('lintKb validates invalidation fields and exempts invalidated pages from or
   assert.ok(!orphans.includes('entities/old.md'))
 })
 
+test('lintKb flags a page that supersedes itself (self is a real id, so target-missing would miss it)', async (t) => {
+  const d = tmp(t)
+  initKb(d)
+  fs.writeFileSync(path.join(d, 'raw/r.md'), 'raw')
+  // superseded_by points at the page itself: invalidated with no valid successor.
+  fs.writeFileSync(path.join(d, 'wiki/concepts/loop.md'),
+    `---\ntype: concept\ntitle: Loop\ndescription: d\ntags: [x]\nsources: [raw/r.md]\ncreated: 2026-01-01\nupdated: 2026-01-01\nstatus: invalidated\nsuperseded_by: concepts/loop\n---\n\nbody [[concepts/other]]`)
+  // a normal supersede to a real OTHER page must NOT be flagged as self-supersede
+  fs.writeFileSync(path.join(d, 'wiki/concepts/other.md'),
+    `---\ntype: concept\ntitle: Other\ndescription: d\ntags: [x]\nsources: [raw/r.md]\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n\nbody [[concepts/loop]]`)
+  const r = await lintKb(d)
+  const self = r.mechanical.filter(i => i.rule === 'self-supersede')
+  assert.deepEqual(self.map(i => i.path), ['concepts/loop.md'])
+  assert.ok(!r.mechanical.some(i => i.rule === 'superseded-target-missing'), 'a self-supersede is not also target-missing (self id exists)')
+})
+
 test('lintKb orphan exemption covers invalidated pages with no incoming links', async (t) => {
   const d = tmp(t)
   initKb(d)

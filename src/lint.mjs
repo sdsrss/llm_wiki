@@ -47,8 +47,15 @@ export async function lintKb(kbRoot, { fix = false } = {}) {
     if (pg.data.status !== undefined && !PAGE_STATUSES.includes(pg.data.status)) {
       mechanical.push({ rule: 'invalid-status', path: pg.relPath, detail: `status "${pg.data.status}" (expected ${PAGE_STATUSES.join(' | ')})` })
     }
-    if (pg.data.superseded_by !== undefined && !ids.has(String(pg.data.superseded_by))) {
-      mechanical.push({ rule: 'superseded-target-missing', path: pg.relPath, detail: `superseded_by -> ${pg.data.superseded_by}` })
+    if (pg.data.superseded_by !== undefined) {
+      const supTarget = String(pg.data.superseded_by)
+      // A page cannot be its own replacement: superseded_by == self invalidates the page
+      // with no valid successor (checked before target-missing, since the self id exists).
+      if (supTarget === pg.relPath.replace(/\.md$/, '')) {
+        mechanical.push({ rule: 'self-supersede', path: pg.relPath, detail: 'superseded_by points at itself' })
+      } else if (!ids.has(supTarget)) {
+        mechanical.push({ rule: 'superseded-target-missing', path: pg.relPath, detail: `superseded_by -> ${pg.data.superseded_by}` })
+      }
     }
     if (pg.data.relations !== undefined && !Array.isArray(pg.data.relations)) {
       mechanical.push({ rule: 'invalid-relation-entry', path: pg.relPath, detail: 'relations must be a YAML list' })
