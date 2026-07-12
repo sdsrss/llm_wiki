@@ -14,6 +14,7 @@ export const DEFAULT_CONFIG = {
   maxFileBytes: 52428800,
   bm25TitleWeight: 3,
   vectorEnabled: false,
+  lexicalGuard: true,
   relationTypes: ['implements', 'uses', 'depends_on', 'part_of', 'instance_of', 'derived_from', 'contrasts_with', 'causes'],
 }
 
@@ -38,6 +39,11 @@ export function loadKbConfig(kbRoot) {
     const n = Math.trunc(Number(merged[k]))
     merged[k] = Number.isFinite(n) && n >= 1 ? n : DEFAULT_CONFIG[k]
   }
+  // lexicalGuard is a boolean gate; a non-boolean override (string/number/null) must
+  // not read as truthy. Only an explicit true/false is honored — anything else falls
+  // back to the default. (Targeted, not a general boolean sweep: vectorEnabled keeps
+  // its existing truthy semantics to avoid changing behavior on malformed input.)
+  merged.lexicalGuard = typeof merged.lexicalGuard === 'boolean' ? merged.lexicalGuard : DEFAULT_CONFIG.lexicalGuard
   return merged
 }
 

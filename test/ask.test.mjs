@@ -9,6 +9,7 @@ import { buildIndex } from '../src/indexer.mjs'
 import { askKb, retrievePages, rrfFuse, locatePages } from '../src/ask.mjs'
 import { saveVectorStore } from '../src/vector.mjs'
 import { loadLlmConfig, makeTransport } from '../src/llm-config.mjs'
+import { loadKbConfig, DEFAULT_CONFIG } from '../src/templates.mjs'
 
 function tmp(t) {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'llmwiki-'))
@@ -593,4 +594,17 @@ test('ask --retrieve-only emits a stderr diagnostic (not silence) when 0 pages l
   assert.equal(r.status, 0, 'read-only query returning nothing is not an error')
   assert.equal(r.stdout.trim(), '', 'stdout stays pipe-clean (no page lines)')
   assert.match(r.stderr, /no pages located/, 'a human-readable diagnostic goes to stderr')
+})
+
+test('loadKbConfig defaults lexicalGuard true and coerces non-booleans to the default', (t) => {
+  const d = tmp(t)
+  initKb(d)
+  // no key set -> default true
+  assert.equal(loadKbConfig(d).lexicalGuard, true)
+  // explicit false is honored
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ lexicalGuard: false }))
+  assert.equal(loadKbConfig(d).lexicalGuard, false)
+  // garbage (string) -> falls back to the default true, never a truthy string
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ lexicalGuard: 'no' }))
+  assert.equal(loadKbConfig(d).lexicalGuard, true)
 })
