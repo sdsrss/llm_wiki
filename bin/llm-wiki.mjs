@@ -89,10 +89,16 @@ program.command('ask <question>')
   .action(async (question, opts) => {
     const k = Number.parseInt(opts.k, 10)
     if (!Number.isFinite(k) || k < 1) { console.error(`invalid -k value: ${opts.k} (expected a positive integer)`); process.exit(1) }
+    if (!question.trim()) { console.error('empty question — provide something to ask'); process.exit(1) }
     const r = await askKb(opts.kb, question, { k, retrieveOnly: opts.retrieveOnly })
     if (opts.retrieveOnly) {
       if (r.pages.length === 0) {
-        console.error('no pages located — the KB has no matching wiki pages (build them with the wiki-build skill, or check that wiki/ contains pages)')
+        // Distinguish "wiki is empty" (build pages) from "wiki has pages but none
+        // matched" (rephrase) — the old fixed message told users with a full KB to go
+        // build pages they already have.
+        console.error(r.kbEmpty
+          ? 'no pages located — the wiki has no pages yet (build them with the wiki-build skill, or check that wiki/ contains pages)'
+          : 'no pages located — no wiki page matched your query (the wiki has pages; try different or fewer search terms)')
         return
       }
       for (const h of r.pages) console.log(`${h.score.toFixed(3)}  ${h.relPath}  [${(h.sources ?? ['bm25']).join('+')}]`)
@@ -164,12 +170,17 @@ program.command('export')
   })
 
 const graphCmd = program.command('graph').description('query wiki/graph.json: path | neighbors | hubs (zero-LLM traversal)')
+  // Accept --kb on the parent too, so `graph --kb ./kb hubs` works like every other
+  // command (`ask --kb`, `lint --kb`). Subcommands keep their own --kb (no default) and
+  // fall back to the parent's, so both placements resolve and neither silently wins '.'.
+  .option('--kb <dir>', 'knowledge base root', '.')
+const graphKb = (opts) => opts.kb ?? graphCmd.opts().kb
 
 graphCmd.command('path <from> <to>')
   .description('shortest link chain between two page ids (either link direction)')
-  .option('--kb <dir>', 'knowledge base root', '.')
+  .option('--kb <dir>', 'knowledge base root')
   .action((from, to, opts) => {
-    const r = shortestPath(loadGraph(opts.kb), from, to)
+    const r = shortestPath(loadGraph(graphKb(opts)), from, to)
     if (!r) { console.log(`no path between ${from} and ${to}`); return }
     console.log(r.nodes[0])
     for (const h of r.hops) console.log(`  ${h.dir === 'out' ? `-[${h.type}]->` : `<-[${h.type}]-`} ${h.to}${h.confidence ? `  (${h.confidence})` : ''}${h.status === 'invalidated' ? '  ⚠ invalidated' : ''}`)
@@ -178,11 +189,11 @@ graphCmd.command('path <from> <to>')
 graphCmd.command('neighbors <id>')
   .description('pages within N hops (links counted in both directions)')
   .option('-d, --depth <n>', 'expansion depth', '1')
-  .option('--kb <dir>', 'knowledge base root', '.')
+  .option('--kb <dir>', 'knowledge base root')
   .action((id, opts) => {
     const depth = Number.parseInt(opts.depth, 10)
     if (!Number.isFinite(depth) || depth < 1) { console.error(`invalid depth: ${opts.depth} (expected a positive integer)`); process.exit(1) }
-    const r = neighborhood(loadGraph(opts.kb), id, depth)
+    const r = neighborhood(loadGraph(graphKb(opts)), id, depth)
     if (!r.length) { console.log(`${id} has no linked neighbors`); return }
     for (const n of r) console.log(`d=${n.distance}  ${n.id}  [${n.type}${n.confidence ? '/' + n.confidence : ''} ${n.dir}]${n.status === 'invalidated' ? '  ⚠ invalidated' : ''}`)
   })
@@ -190,11 +201,11 @@ graphCmd.command('neighbors <id>')
 graphCmd.command('hubs')
   .description('most-connected pages (degree ranking; raw files excluded)')
   .option('--top <n>', 'how many to show', '10')
-  .option('--kb <dir>', 'knowledge base root', '.')
+  .option('--kb <dir>', 'knowledge base root')
   .action((opts) => {
     const top = Number.parseInt(opts.top, 10)
     if (!Number.isFinite(top) || top < 1) { console.error(`invalid --top: ${opts.top} (expected a positive integer)`); process.exit(1) }
-    for (const h of hubs(loadGraph(opts.kb), { top })) {
+    for (const h of hubs(loadGraph(graphKb(opts)), { top })) {
       console.log(`${String(h.degree).padStart(3)}  ${h.id}  (in ${h.in} / out ${h.out})  ${h.title}${h.status === 'invalidated' ? '  ⚠ invalidated' : ''}`)
     }
   })

@@ -60,6 +60,11 @@ test('index / lint / status / graph CLI commands wire through to their modules',
   assert.match(run('graph', 'neighbors', 'sources/a', '--kb', d).stdout, /entities\/thing/)
   assert.match(run('graph', 'hubs', '--kb', d).stdout, /sources\/a|entities\/thing/)
   assert.match(run('graph', 'path', 'sources/a', 'entities/thing', '--kb', d).stdout, /entities\/thing/)
+  // --kb also works at the PARENT level (like every other command: `<cmd> --kb ...`),
+  // not only after the subcommand — regression guard for the graph option placement.
+  const parentKb = run('graph', '--kb', d, 'hubs')
+  assert.equal(parentKb.status, 0, parentKb.stderr)
+  assert.match(parentKb.stdout, /sources\/a|entities\/thing/)
 })
 
 test('index CLI warns on stderr when a page is skipped for invalid frontmatter (QA73-001)', (t) => {
