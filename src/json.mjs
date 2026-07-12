@@ -1,4 +1,9 @@
 import fs from 'node:fs'
+import { randomBytes } from 'node:crypto'
+
+// Per-write temp counter: combined with the pid it keeps concurrent writers to the
+// same target on distinct temp files even within one process (see writeFileAtomic).
+let atomicSeq = 0
 
 // JSON.parse with the offending file named in the error — a bare SyntaxError
 // from a corrupt state file gives the user nothing to act on.
@@ -22,7 +27,19 @@ export function readJsonFile(file, { redactContents = false } = {}) {
 // only ever sees the whole old file or the whole new one. Single source of the pattern
 // that manifest/vector already used and buildIndex's derived stores previously missed.
 export function writeFileAtomic(file, data) {
-  const tmp = `${file}.tmp`
-  fs.writeFileSync(tmp, data)
-  fs.renameSync(tmp, file)
+  // Unique temp name per write. A fixed `${file}.tmp` makes two concurrent writers to
+  // the same target share one temp file: the first rename consumes it, the second then
+  // renames a now-missing file and crashes with ENOENT (concurrent `index`, or MCP +
+  // CLI touching the same derived file). pid + seq + random keeps temps independent.
+  // The rename onto `file` stays atomic, so readers still never see a torn write.
+  const tmp = `${file}.${process.pid}.${(atomicSeq++).toString(36)}.${randomBytes(4).toString('hex')}.tmp`
+  try {
+    fs.writeFileSync(tmp, data)
+    fs.renameSync(tmp, file)
+  } catch (err) {
+    // Unique temps don't self-overwrite on the next run, so a failed write must clean
+    // up after itself or it leaks a stray .tmp beside the target.
+    try { fs.unlinkSync(tmp) } catch { /* best-effort */ }
+    throw err
+  }
 }

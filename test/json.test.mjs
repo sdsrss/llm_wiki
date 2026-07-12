@@ -30,3 +30,33 @@ test('writeFileAtomic replaces an existing file via rename (never truncates in p
   assert.deepEqual(readJsonFile(f).nodes, [4, 5, 6, 7])
   assert.ok(!fs.existsSync(`${f}.tmp`))
 })
+
+test('writeFileAtomic uses a distinct temp per write (concurrent writers do not collide)', (t) => {
+  const d = tmp(t)
+  const f = path.join(d, 'x.json')
+  const temps = []
+  const origWrite = fs.writeFileSync
+  fs.writeFileSync = (p, data) => { temps.push(String(p)); return origWrite(p, data) }
+  t.after(() => { fs.writeFileSync = origWrite })
+  writeFileAtomic(f, 'a')
+  writeFileAtomic(f, 'b')
+  assert.equal(temps.length, 2)
+  // The old fixed `${f}.tmp` made two concurrent writers share one temp: the first
+  // rename consumed it, the second renamed a missing file (ENOENT). Each write must
+  // get its own temp, and never the fixed name.
+  assert.notEqual(temps[0], `${f}.tmp`)
+  assert.notEqual(temps[0], temps[1], 'each write gets a distinct temp path')
+  assert.ok(temps.every(p => p.startsWith(f) && p.endsWith('.tmp')))
+  assert.equal(fs.readFileSync(f, 'utf8'), 'b', 'final content is the last complete write')
+})
+
+test('writeFileAtomic unlinks its temp when the rename fails (no stray .tmp leak)', (t) => {
+  const d = tmp(t)
+  const f = path.join(d, 'y.json')
+  const origRename = fs.renameSync
+  fs.renameSync = () => { throw new Error('boom-rename') }
+  t.after(() => { fs.renameSync = origRename })
+  assert.throws(() => writeFileAtomic(f, 'data'), /boom-rename/)
+  // unique temps don't self-overwrite next run, so a failed write must clean up its own.
+  assert.deepEqual(fs.readdirSync(d).filter(n => n.endsWith('.tmp')), [], 'temp removed after failed rename')
+})
