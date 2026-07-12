@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.3 (2026-07-12)
+
+Two robustness fixes from the final targeted dogfooding sweep. No config schema
+change, no KB migration, no retrieval-default change. Suite 228 → 230.
+
+**Fixes:**
+
+- **`graph`/exports name the file on a corrupt `graph.json`.** `loadGraph` was the
+  last JSON reader still using a bare `JSON.parse`: a corrupt `wiki/graph.json`
+  threw an unqualified `Unexpected token` SyntaxError, and a valid-JSON-but-wrong-
+  shape file like `{}` crashed on `graph.nodes.map`. It now routes through the
+  shared `readJsonFile` (names the file) and guards the nodes/edges shape, so both
+  corruption modes yield a named, actionable "rerun `llm-wiki index`" error.
+- **`.scan-plan.json` is written atomically.** `scan` wrote the plan with a direct
+  `writeFileSync`, but `convert` reads it from a separate process — the same
+  truncate-then-write torn read that 0.7.2 fixed for `graph.json`. It (and
+  `.lint-report.json`) now write via the shared temp-and-rename `writeFileAtomic`,
+  so every JSON state file another process can read is crash-safe.
+
 ## 0.7.2 (2026-07-12)
 
 Three defects found by continued end-to-end dogfooding — two robustness/DoS
