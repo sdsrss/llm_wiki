@@ -58,8 +58,17 @@ test('saveManifest writes atomically and leaves no .tmp behind', (t) => {
   initKb(d)
   const m = loadManifest(d)
   m.files['a.md'] = { hash: 'h1', raw: 'raw/a.md', convertedAt: '2026-07-11' }
+  // Spy on fs.renameSync — writeFileAtomic's distinguishing call. The .tmp-residue
+  // check below passes even for a regression to a bare fs.writeFileSync (which never
+  // creates a .tmp), so observing the rename is what actually proves the atomic path.
+  // The manifest is read by convert in a separate process; a torn read is mem #10097.
+  const origRename = fs.renameSync
+  const renamedTo = []
+  fs.renameSync = (from, to) => { renamedTo.push(path.relative(d, to)); return origRename(from, to) }
+  t.after(() => { fs.renameSync = origRename })
   saveManifest(d, m)
   assert.ok(fs.existsSync(path.join(d, '.manifest.json')), 'manifest present after save')
   assert.ok(!fs.existsSync(path.join(d, '.manifest.json.tmp')), 'temp sibling renamed away')
+  assert.ok(renamedTo.includes('.manifest.json'), 'manifest written through writeFileAtomic (rename observed), not a direct truncating write')
   assert.deepEqual(loadManifest(d).files['a.md'].hash, 'h1', 'content readable after atomic rename')
 })

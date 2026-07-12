@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 // One command → full eval report (retrieval per KB/tier + answer-level).
 // Usage: node scripts/eval/run-all.mjs --kb ./kb [--tiers 50,150]
-//        [--arms bm25,vector,hybrid,auto,graph] [--judge-model M] [-k 5]
+//        [--arms bm25,vector,hybrid,auto,graph] [--answer-arms bm25,auto]
+//        [--judge-model M] [-k 5]
+// --arms drives the retrieval sections; --answer-arms drives the answer-level
+// head-to-head (needs exactly 2 arms) and defaults to the shipped default mode
+// (auto) vs pure lexical, so the judged comparison reflects what users actually get.
 // Sections whose prerequisites are missing are SKIPPED with the reason in the
 // report — never silently.
 import fs from 'node:fs'
@@ -13,6 +17,7 @@ const opt = (name, dflt) => { const i = args.indexOf(name); return i === -1 ? df
 const kb = opt('--kb', './kb')
 const tiers = opt('--tiers', '50,150').split(',').filter(Boolean)
 const arms = opt('--arms', 'bm25,vector,hybrid,auto,graph')
+const answerArms = opt('--answer-arms', 'bm25,auto')
 const judgeModel = opt('--judge-model', null)
 const k = opt('-k', '5')
 
@@ -42,7 +47,7 @@ for (const tier of tiers) {
   run(`Retrieval — tier ${tier}`, ['scripts/eval/eval.mjs', '--kb', tierKb, '--probes', `scripts/eval/probes-${tier}.jsonl`, '--arms', tierArms, '-k', k])
 }
 if (judgeModel) {
-  run(`Answers — ${kb} (abstention + head-to-head)`, ['scripts/eval/answer-eval.mjs', '--kb', kb, '--arms', 'bm25,hybrid', '--judge-model', judgeModel, '-k', k])
+  run(`Answers — ${kb} (abstention + head-to-head)`, ['scripts/eval/answer-eval.mjs', '--kb', kb, '--arms', answerArms, '--judge-model', judgeModel, '-k', k])
 } else {
   sections.push('## Answers — SKIPPED\n\nno --judge-model given (needed for abstention classification and head-to-head judging)\n')
 }

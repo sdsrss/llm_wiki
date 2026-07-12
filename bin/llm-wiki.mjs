@@ -14,7 +14,6 @@ import { statusKb } from '../src/status.mjs'
 import { connectProject, installSkills } from '../src/connect.mjs'
 import { exportGraph, loadGraph, exportMarkdownPages } from '../src/export.mjs'
 import { shortestPath, neighborhood, hubs } from '../src/graph.mjs'
-import { runMcpServer } from '../src/mcp.mjs'
 
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
@@ -203,6 +202,9 @@ program.command('mcp')
   .description('run a read-only MCP server (stdio) over the knowledge base')
   .option('--kb <dir>', 'knowledge base root', '.')
   .action(async (opts) => {
+    // Lazy import: mcp.mjs pulls in the MCP SDK + zod, which no other command needs.
+    // Static-importing it would load them on every scan/convert/ask invocation.
+    const { runMcpServer } = await import('../src/mcp.mjs')
     // stdout belongs to the MCP transport from here on — no console.log.
     await runMcpServer(opts.kb)
   })

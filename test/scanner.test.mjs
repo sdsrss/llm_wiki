@@ -53,6 +53,13 @@ test('scanSource: dedup, batching, plan file', async (t) => {
   fs.mkdirSync(path.join(src, 'sub'))
   for (let i = 0; i < 6; i++) fs.writeFileSync(path.join(src, 'sub', `f${i}.md`), `# F${i}\n${'unique english content '.repeat(30)}${i}`)
   fs.writeFileSync(path.join(src, 'skip.bin'), 'binary')
+  // Spy on fs.renameSync — writeFileAtomic's distinguishing call. The .tmp-residue
+  // check below also passes for a regression to a bare fs.writeFileSync (no .tmp is
+  // ever created), so observing the rename is what proves the atomic path (mem #10097).
+  const origRename = fs.renameSync
+  const renamedTo = []
+  fs.renameSync = (from, to) => { renamedTo.push(path.relative(kb, to)); return origRename(from, to) }
+  t.after(() => { fs.renameSync = origRename })
   const r = await scanSource(src, kb, {})
   assert.equal(r.duplicates.exact.length, 1)
   assert.ok(r.duplicates.near.some(([a, b]) => [a, b].includes('a-near.md')))
@@ -66,6 +73,7 @@ test('scanSource: dedup, batching, plan file', async (t) => {
   // convert reads .scan-plan.json in a separate process — it must be written via
   // temp+rename (no leftover .tmp) so a concurrent read can't see a torn file.
   assert.ok(!fs.existsSync(path.join(kb, '.scan-plan.json.tmp')), 'plan written atomically, no leftover temp')
+  assert.ok(renamedTo.includes('.scan-plan.json'), 'plan written through writeFileAtomic (rename observed), not a direct truncating write')
 })
 
 // ISSUE-002: bad srcDir used to leak a raw ENOENT/ENOTDIR node error.

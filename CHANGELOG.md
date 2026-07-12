@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.8.3 (2026-07-12)
+
+Performance and test-hardening cleanup; no shipped behavior change. Suite 261 → 263.
+
+**Changed:**
+
+- **Retrieval parses the wiki page set once per query, not up to three times.** The
+  BM25 build, the vector-hit valid set, and the index-listing fallback's id set now
+  share one page cache keyed by the same mtime + size freshness token as the BM25
+  index (added in 0.8.2), so any add / edit / removal / invalidation still busts it
+  and retired knowledge can never resurface. On a long-lived MCP server a vector
+  (`auto`/`hybrid`) query drops its second full page parse; `locatePages` also reads
+  `wiki.config.json` once instead of twice.
+- **The `mcp` command loads the MCP SDK + zod lazily.** They were imported at CLI
+  startup for every command; only `mcp` needs them. `scan` / `convert` / `ask` /
+  `init` and friends now skip ~200–250 ms of import cost.
+
+**Internal (not shipped in the npm package):**
+
+- Atomic-write regression guards: `saveManifest`, `saveVectorStore`, and the `scan`
+  plan write now assert the temp + rename path via a `fs.renameSync` spy — the old
+  `.tmp`-absence check alone also passed for a direct truncating write (mem #10097).
+- The full eval report (`scripts/eval/run-all.mjs`) judges the shipped default
+  retrieval mode: answer-level head-to-head now defaults to `bm25,auto` (was the
+  hardcoded `bm25,hybrid`) and takes an `--answer-arms` flag.
+
 ## 0.8.2 (2026-07-12)
 
 Performance, no behavior change. Suite 260 → 261.

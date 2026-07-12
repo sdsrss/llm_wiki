@@ -10,24 +10,21 @@ import { loadVectorStore, normalize, cosineTopK } from './vector.mjs'
 import { embedTexts } from './embed.mjs'
 import { fetchWithRetry } from './retry.mjs'
 
-// One built BM25 index per KB root, reused across queries while the wiki pages and
-// title-weight config are unchanged. The cost being cached is reading + tokenizing
-// every page: a CLI process builds it once and exits (cache is transparent there), but
-// a long-lived MCP server otherwise rebuilds from disk on every wiki_search. Bounded so
-// a process serving many KBs can't grow it without limit.
-const bm25Cache = new Map()
-const BM25_CACHE_MAX = 8
+// Two per-KB caches, both keyed by a cheap page-set freshness token so neither can
+// serve a stale view. The token is each live page file's mtime+size: any page
+// add / remove / in-place edit / invalidation (a frontmatter status change IS a
+// content change) flips it and forces a rebuild. Statting the page set is far cheaper
+// than reading + parsing it; MCP is read-only and never mutates pages while serving, so
+// within one server's lifetime pages change only via a separate build process (which
+// rewrites files with new mtimes). Both caches are bounded so a process serving many
+// KBs can't grow them without limit.
+const bm25Cache = new Map()   // kbRoot -> { token: `${pagesToken}|w=${w}`, idx }
+const pagesCache = new Map()  // kbRoot -> { token: pagesToken, pages }
+const CACHE_MAX = 8
 
-// Cheap freshness token: each live page file's mtime+size plus the title weight. Any
-// page add / remove / in-place edit / invalidation (a frontmatter status change IS a
-// content change) or config change flips the token and forces a rebuild — so the cache
-// can never serve a stale index. Statting the page set is far cheaper than reading and
-// tokenizing it; MCP is read-only and never mutates pages while serving, so within one
-// server's lifetime pages change only via a separate build process (which rewrites
-// files with new mtimes).
-function pageSetToken(kbRoot, w) {
+function pagesToken(kbRoot) {
   const wiki = kbPaths(kbRoot).wiki
-  const parts = [`w=${w}`]
+  const parts = []
   for (const dir of PAGE_DIRS) {
     let entries
     try { entries = fs.readdirSync(path.join(wiki, dir)) } catch { continue }
@@ -42,6 +39,23 @@ function pageSetToken(kbRoot, w) {
   return parts.join('|')
 }
 
+// The parsed, filtered live-page list — the dominant per-query cost (listWikiPages
+// reads + frontmatter-parses every page), shared by the BM25 build, the vector-hit
+// valid set, and the listing fallback's validIds. Excluding invalidated pages here is
+// the query-time exclusion every consumer needs, done once. Callers on the same query
+// pass the token already computed for the BM25 cache; standalone callers let it default.
+function livePages(kbRoot, token = pagesToken(kbRoot)) {
+  let entry = pagesCache.get(kbRoot)
+  if (!entry || entry.token !== token) {
+    const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
+    pagesCache.delete(kbRoot) // re-insert so this KB becomes most-recent for LRU eviction
+    pagesCache.set(kbRoot, { token, pages })
+    while (pagesCache.size > CACHE_MAX) pagesCache.delete(pagesCache.keys().next().value)
+    entry = pagesCache.get(kbRoot)
+  }
+  return entry.pages
+}
+
 export function retrievePages(kbRoot, question, k = 6) {
   // Title is a field: repeat it bm25TitleWeight times in the indexed text so a
   // title term outweighs the same term buried in the body (measured +0.04 Recall@5
@@ -50,17 +64,17 @@ export function retrievePages(kbRoot, question, k = 6) {
   // loadKbConfig guarantees a finite integer >= 1; cap the upper bound so a large
   // value can't materialize a giant per-page array (Array(w).fill) and OOM retrieval.
   const w = Math.min(25, loadKbConfig(kbRoot).bm25TitleWeight)
-  const token = pageSetToken(kbRoot, w)
+  const token = pagesToken(kbRoot)
+  const bmKey = `${token}|w=${w}` // title weight changes the indexed text but not the page list
   let entry = bm25Cache.get(kbRoot)
-  if (!entry || entry.token !== token) {
-    const pages = listWikiPages(kbRoot).filter(p => !p.error && !isInvalidated(p))
-    const idx = buildBm25Index(pages.map(p => ({
+  if (!entry || entry.token !== bmKey) {
+    const idx = buildBm25Index(livePages(kbRoot, token).map(p => ({
       id: p.relPath,
       text: [Array(w).fill(p.data.title ?? '').join('\n'), p.data.description, asList(p.data.tags).join(' '), p.body].join('\n'),
     })))
     bm25Cache.delete(kbRoot) // re-insert so this KB becomes most-recent for LRU eviction
-    bm25Cache.set(kbRoot, { token, idx })
-    while (bm25Cache.size > BM25_CACHE_MAX) bm25Cache.delete(bm25Cache.keys().next().value)
+    bm25Cache.set(kbRoot, { token: bmKey, idx })
+    while (bm25Cache.size > CACHE_MAX) bm25Cache.delete(bm25Cache.keys().next().value)
     entry = bm25Cache.get(kbRoot)
   }
   return searchBm25(entry.idx, question, k).map(h => ({ relPath: h.id, score: h.score }))
@@ -121,7 +135,9 @@ export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieva
     if (retrieval === 'hybrid') throw new Error(`retrieval 'hybrid' unavailable: ${what}`)
     return asBm25()
   }
-  if (retrieval === 'auto' && !loadKbConfig(kbRoot).vectorEnabled) return asBm25()
+  // One config read for both the vectorEnabled gate and the lexicalGuard flag below.
+  const kbCfg = loadKbConfig(kbRoot)
+  if (retrieval === 'auto' && !kbCfg.vectorEnabled) return asBm25()
   const store = loadVectorStore(kbRoot)
   if (!store) return unavailable('no wiki/.vectors.json — run `llm-wiki embed` first')
   const cfg = loadLlmConfig(kbRoot)
@@ -138,10 +154,10 @@ export async function locatePages(kbRoot, question, { k = 6, fetchImpl, retrieva
     // renamed since then still have vectors. Keep only hits that map to a live,
     // non-invalidated page so retired knowledge cannot resurface (and askKb never
     // ENOENTs reading a vanished file).
-    const valid = new Set(listWikiPages(kbRoot).filter(pg => !pg.error && !isInvalidated(pg)).map(pg => pg.relPath))
+    const valid = new Set(livePages(kbRoot).map(pg => pg.relPath))
     const vecHitsValid = vecHits.filter(h => valid.has(h.relPath))
     const { hits, guardApplied } = fuseChannels({ bm25, vector: vecHitsValid }, k,
-      { lexicalGuard: retrieval === 'auto' && loadKbConfig(kbRoot).lexicalGuard })
+      { lexicalGuard: retrieval === 'auto' && kbCfg.lexicalGuard })
     return { hits, usedVector: true, guardApplied }
   } catch (err) {
     if (retrieval === 'hybrid') throw err
@@ -216,9 +232,7 @@ export async function askKb(kbRoot, question, { k = 6, retrieveOnly = false, fet
   if (retrieveOnly) return { pages: hits, answer: null }
   let validIds
   if (hits.length === 0) {
-    validIds = new Set(listWikiPages(kbRoot)
-      .filter(pg => !pg.error && !isInvalidated(pg))
-      .map(pg => pg.relPath.replace(/\.md$/, '')))
+    validIds = new Set(livePages(kbRoot).map(pg => pg.relPath.replace(/\.md$/, '')))
     if (validIds.size === 0) throw new Error('No relevant pages found — the knowledge base has no valid pages.')
   }
   const cfg = loadLlmConfig(kbRoot)

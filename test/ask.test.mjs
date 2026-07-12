@@ -538,6 +538,37 @@ test('locatePages drops vector hits for pages invalidated after embed (no resurr
     'an invalidated page must not resurface through the stale vector store')
 })
 
+// The vector valid-set (locatePages) and the BM25 build now share one token-keyed
+// page cache (R20 extension). A warm query must not pin a page that is invalidated
+// on disk afterward — the shared cache has to bust on the mtime+size token for the
+// valid-set consumer too, not just the BM25 build, or retired knowledge resurfaces.
+test('shared page cache busts on invalidation for the vector valid-set path, not just BM25', async (t) => {
+  const d = tmp(t)
+  seedKb(d)
+  const target = path.join(d, 'wiki/sources/target.md')
+  const live = (extra = '') => `---\ntype: source\ntitle: Target page\ndescription: warm target\ntags: [target]\ncreated: 2026-01-01\nupdated: 2026-01-01${extra}\n---\n\ntarget body zzz`
+  fs.writeFileSync(target, live())
+  fs.writeFileSync(path.join(d, 'wiki.config.json'), JSON.stringify({ vectorEnabled: true }))
+  saveVectorStore(d, { model: 'emb-1', dim: 2, pages: {
+    'sources/target.md': { hash: 'h', vec: [1, 0] },
+    'sources/other.md': { hash: 'h', vec: [0, 1] },
+  } })
+  process.env.LLM_WIKI_CONFIG_DIR = path.join(d, 'cfgdir')
+  fs.mkdirSync(process.env.LLM_WIKI_CONFIG_DIR)
+  fs.writeFileSync(path.join(process.env.LLM_WIKI_CONFIG_DIR, 'config.json'),
+    JSON.stringify({ baseURL: 'https://api.example.invalid/v1', apiKey: 'k', model: 'm', embeddingModel: 'emb-1' }))
+  t.after(() => delete process.env.LLM_WIKI_CONFIG_DIR)
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ data: [{ index: 0, embedding: [1, 0] }] }) })
+  // Warm query: target is live, so it passes the valid-set and populates the cache.
+  const warm = await locatePages(d, 'anything', { fetchImpl })
+  assert.ok(warm.hits.some(h => h.relPath === 'sources/target.md'), 'live target retrieved while warm')
+  // Invalidate on disk (changes mtime+size -> token flips), then re-query.
+  fs.writeFileSync(target, live('\nstatus: invalidated\ninvalidated: 2026-07-12\nsuperseded_by: sources/other'))
+  const after = await locatePages(d, 'anything', { fetchImpl })
+  assert.ok(!after.hits.some(h => h.relPath === 'sources/target.md'),
+    'a cache-forever valid-set would still return the now-invalidated page — the shared token must bust it')
+})
+
 test('locatePages drops vector hits whose file no longer exists on disk (no ENOENT)', async (t) => {
   const d = tmp(t)
   seedKb(d)

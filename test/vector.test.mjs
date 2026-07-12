@@ -34,6 +34,23 @@ test('vector store roundtrip: save rounds to 5 decimals, load returns shape', (t
   assert.equal(vectorStorePath(d), path.join(d, 'wiki', '.vectors.json'))
 })
 
+test('saveVectorStore writes atomically (rename observed, no .tmp residue)', (t) => {
+  const d = tmp(t)
+  // The sidecar is JSON.parse'd by loadVectorStore at query time in a separate process;
+  // a bare fs.writeFileSync truncates it first, so a concurrent read sees a torn file.
+  // The .tmp-residue check alone passes even for a direct write (no .tmp ever created) —
+  // spying on fs.renameSync (writeFileAtomic's distinguishing call) is what proves the
+  // atomic path and would redden a regression to a truncating write. Guards mem #10097.
+  const origRename = fs.renameSync
+  const renamedTo = []
+  fs.renameSync = (from, to) => { renamedTo.push(path.relative(d, to)); return origRename(from, to) }
+  t.after(() => { fs.renameSync = origRename })
+  saveVectorStore(d, { model: 'm', dim: 2, pages: { 'sources/a.md': { hash: 'h', vec: [1, 0] } } })
+  assert.ok(!fs.existsSync(path.join(d, 'wiki', '.vectors.json.tmp')), 'temp sibling renamed away')
+  assert.ok(renamedTo.includes(path.join('wiki', '.vectors.json')), 'store written through writeFileAtomic (rename observed), not a direct truncating write')
+  assert.equal(loadVectorStore(d).model, 'm', 'content readable after atomic rename')
+})
+
 test('loadVectorStore returns null when the sidecar is missing', (t) => {
   const d = tmp(t)
   assert.equal(loadVectorStore(d), null)
